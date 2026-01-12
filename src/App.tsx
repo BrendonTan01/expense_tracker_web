@@ -1,4 +1,4 @@
-import { useState, useEffect, Component, ReactNode } from 'react';
+import { useState, useEffect, Component, ReactNode, Suspense, lazy } from 'react';
 import { AppState, Transaction, Bucket, RecurringTransaction, Budget } from './types';
 import { generateId } from './utils/storage';
 import { appStateApi, bucketsApi, transactionsApi, recurringApi, budgetsApi } from './utils/api';
@@ -6,9 +6,11 @@ import { shouldGenerateTransaction, getNextOccurrence } from './utils/dateHelper
 import BucketManager from './components/BucketManager';
 import TransactionForm from './components/TransactionForm';
 import TransactionList from './components/TransactionList';
-import RecurringTransactionManager from './components/RecurringTransactionManager';
-import BudgetManager from './components/BudgetManager';
-import Summary from './components/Summary';
+
+// Lazy load heavy components to reduce initial bundle size
+const Summary = lazy(() => import('./components/Summary'));
+const RecurringTransactionManager = lazy(() => import('./components/RecurringTransactionManager'));
+const BudgetManager = lazy(() => import('./components/BudgetManager'));
 
 type Tab = 'summary' | 'transactions' | 'buckets' | 'recurring' | 'budgets';
 
@@ -66,8 +68,11 @@ function App() {
         const data = await appStateApi.load();
         setState(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load data');
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load data';
+        setError(errorMessage);
         console.error('Failed to load data:', err);
+        // Don't block the UI - allow user to see the app even if API fails
+        // They'll see the error message but can still interact
       } finally {
         setLoading(false);
       }
@@ -450,7 +455,9 @@ function App() {
 
       <main className="app-main">
         {activeTab === 'summary' && (
-          <Summary transactions={state.transactions} buckets={state.buckets} budgets={state.budgets} />
+          <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading summary...</div>}>
+            <Summary transactions={state.transactions} buckets={state.buckets} budgets={state.budgets} />
+          </Suspense>
         )}
 
         {activeTab === 'transactions' && (
@@ -484,25 +491,29 @@ function App() {
 
         {activeTab === 'recurring' && (
           <ErrorBoundary>
-            <RecurringTransactionManager
-              recurringTransactions={state.recurringTransactions || []}
-              buckets={state.buckets || []}
-              transactions={state.transactions || []}
-              onAdd={handleAddRecurring}
-              onUpdate={handleUpdateRecurring}
-              onDelete={handleDeleteRecurring}
-            />
+            <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading recurring transactions...</div>}>
+              <RecurringTransactionManager
+                recurringTransactions={state.recurringTransactions || []}
+                buckets={state.buckets || []}
+                transactions={state.transactions || []}
+                onAdd={handleAddRecurring}
+                onUpdate={handleUpdateRecurring}
+                onDelete={handleDeleteRecurring}
+              />
+            </Suspense>
           </ErrorBoundary>
         )}
 
         {activeTab === 'budgets' && (
-          <BudgetManager
-            budgets={state.budgets}
-            buckets={state.buckets}
-            onAdd={handleAddBudget}
-            onUpdate={handleUpdateBudget}
-            onDelete={handleDeleteBudget}
-          />
+          <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading budgets...</div>}>
+            <BudgetManager
+              budgets={state.budgets}
+              buckets={state.buckets}
+              onAdd={handleAddBudget}
+              onUpdate={handleUpdateBudget}
+              onDelete={handleDeleteBudget}
+            />
+          </Suspense>
         )}
       </main>
     </div>
