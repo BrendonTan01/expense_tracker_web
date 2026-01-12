@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Transaction, Bucket } from '../types';
 import { formatCurrency } from '../utils/dateHelpers';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface SummaryProps {
   transactions: Transaction[];
@@ -17,12 +17,25 @@ interface ChartDataPoint {
   bucketBreakdown?: Record<string, number>; // For tooltip breakdown
 }
 
+interface TooltipPayload {
+  dataKey: string;
+  value?: number;
+  payload: ChartDataPoint;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayload[];
+  label?: string;
+  buckets: Bucket[];
+}
+
 // Custom Tooltip Component
-const CustomTooltip = ({ active, payload, label, buckets }: TooltipProps<number, string> & { buckets: Bucket[] }) => {
+const CustomTooltip = ({ active, payload, label, buckets }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload as ChartDataPoint;
-    const incomeValue = payload.find(p => p.dataKey === 'income')?.value as number || 0;
-    const expenseValue = payload.find(p => p.dataKey === 'expenses')?.value as number || 0;
+    const incomeValue = payload.find((p: TooltipPayload) => p.dataKey === 'income')?.value as number || 0;
+    const expenseValue = payload.find((p: TooltipPayload) => p.dataKey === 'expenses')?.value as number || 0;
     
     return (
       <div style={{
