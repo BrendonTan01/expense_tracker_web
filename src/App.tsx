@@ -1,15 +1,16 @@
 import { useState, useEffect, Component, ReactNode } from 'react';
-import { AppState, Transaction, Bucket, RecurringTransaction } from './types';
+import { AppState, Transaction, Bucket, RecurringTransaction, Budget } from './types';
 import { generateId } from './utils/storage';
-import { appStateApi, bucketsApi, transactionsApi, recurringApi } from './utils/api';
+import { appStateApi, bucketsApi, transactionsApi, recurringApi, budgetsApi } from './utils/api';
 import { shouldGenerateTransaction, getNextOccurrence } from './utils/dateHelpers';
 import BucketManager from './components/BucketManager';
 import TransactionForm from './components/TransactionForm';
 import TransactionList from './components/TransactionList';
 import RecurringTransactionManager from './components/RecurringTransactionManager';
+import BudgetManager from './components/BudgetManager';
 import Summary from './components/Summary';
 
-type Tab = 'summary' | 'transactions' | 'buckets' | 'recurring';
+type Tab = 'summary' | 'transactions' | 'buckets' | 'recurring' | 'budgets';
 
 // Error Boundary Component
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -48,6 +49,7 @@ function App() {
     buckets: [],
     transactions: [],
     recurringTransactions: [],
+    budgets: [],
   });
   const [activeTab, setActiveTab] = useState<Tab>('summary');
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -297,6 +299,45 @@ function App() {
     }
   };
 
+  const handleAddBudget = async (budget: Budget) => {
+    try {
+      const newBudget = await budgetsApi.create(budget);
+      setState((prev) => ({
+        ...prev,
+        budgets: [...prev.budgets, newBudget],
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create budget');
+      console.error('Failed to create budget:', err);
+    }
+  };
+
+  const handleUpdateBudget = async (id: string, updates: Partial<Budget>) => {
+    try {
+      const updatedBudget = await budgetsApi.update(id, updates);
+      setState((prev) => ({
+        ...prev,
+        budgets: prev.budgets.map((b) => (b.id === id ? updatedBudget : b)),
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update budget');
+      console.error('Failed to update budget:', err);
+    }
+  };
+
+  const handleDeleteBudget = async (id: string) => {
+    try {
+      await budgetsApi.delete(id);
+      setState((prev) => ({
+        ...prev,
+        budgets: prev.budgets.filter((b) => b.id !== id),
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete budget');
+      console.error('Failed to delete budget:', err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="app">
@@ -351,12 +392,18 @@ function App() {
           >
             Recurring
           </button>
+          <button
+            className={`tab ${activeTab === 'budgets' ? 'active' : ''}`}
+            onClick={() => setActiveTab('budgets')}
+          >
+            Budgets
+          </button>
         </nav>
       </header>
 
       <main className="app-main">
         {activeTab === 'summary' && (
-          <Summary transactions={state.transactions} buckets={state.buckets} />
+          <Summary transactions={state.transactions} buckets={state.buckets} budgets={state.budgets} />
         )}
 
         {activeTab === 'transactions' && (
@@ -393,11 +440,22 @@ function App() {
             <RecurringTransactionManager
               recurringTransactions={state.recurringTransactions || []}
               buckets={state.buckets || []}
+              transactions={state.transactions || []}
               onAdd={handleAddRecurring}
               onUpdate={handleUpdateRecurring}
               onDelete={handleDeleteRecurring}
             />
           </ErrorBoundary>
+        )}
+
+        {activeTab === 'budgets' && (
+          <BudgetManager
+            budgets={state.budgets}
+            buckets={state.buckets}
+            onAdd={handleAddBudget}
+            onUpdate={handleUpdateBudget}
+            onDelete={handleDeleteBudget}
+          />
         )}
       </main>
     </div>

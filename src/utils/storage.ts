@@ -23,6 +23,7 @@ export function loadState(): AppState {
     buckets: [],
     transactions: [],
     recurringTransactions: [],
+    budgets: [],
   };
 }
 

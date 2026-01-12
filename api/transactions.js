@@ -35,12 +35,14 @@ export default async function handler(req, res) {
 
       if (error) throw error;
 
-      // Convert isRecurring from integer to boolean
+      // Convert isRecurring from integer to boolean and parse tags
       const transactions = (data || []).map(t => ({
         ...t,
         isRecurring: Boolean(t.isRecurring),
         bucketId: t.bucketId || undefined,
         recurringId: t.recurringId || undefined,
+        tags: t.tags ? (typeof t.tags === 'string' ? JSON.parse(t.tags) : t.tags) : undefined,
+        notes: t.notes || undefined,
       }));
 
       return res.status(200).json(transactions);
@@ -48,7 +50,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       // CREATE transaction
-      const { id: transactionId, type, amount, description, bucketId, date, isRecurring, recurringId } = req.body;
+      const { id: transactionId, type, amount, description, bucketId, date, isRecurring, recurringId, tags, notes } = req.body;
 
       if (!transactionId || !type || amount === undefined || !description || !date) {
         return res.status(400).json({ error: 'id, type, amount, description, and date are required' });
@@ -69,6 +71,8 @@ export default async function handler(req, res) {
           date,
           isRecurring: isRecurring ? 1 : 0,
           recurringId: recurringId || null,
+          tags: tags && tags.length > 0 ? JSON.stringify(tags) : null,
+          notes: notes || null,
         }])
         .select()
         .single();
@@ -85,6 +89,8 @@ export default async function handler(req, res) {
         isRecurring: Boolean(data.isRecurring),
         bucketId: data.bucketId || undefined,
         recurringId: data.recurringId || undefined,
+        tags: data.tags ? (typeof data.tags === 'string' ? JSON.parse(data.tags) : data.tags) : undefined,
+        notes: data.notes || undefined,
       };
 
       return res.status(201).json(transaction);

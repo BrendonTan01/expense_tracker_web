@@ -34,13 +34,15 @@ export default async function handler(req, res) {
         isRecurring: Boolean(data.isRecurring),
         bucketId: data.bucketId || undefined,
         recurringId: data.recurringId || undefined,
+        tags: data.tags ? (typeof data.tags === 'string' ? JSON.parse(data.tags) : data.tags) : undefined,
+        notes: data.notes || undefined,
       };
 
       return res.status(200).json(transaction);
     }
 
     if (req.method === 'PUT') {
-      const { type, amount, description, bucketId, date, isRecurring, recurringId } = req.body;
+      const { type, amount, description, bucketId, date, isRecurring, recurringId, tags, notes } = req.body;
 
       if (!type || amount === undefined || !description || !date) {
         return res.status(400).json({ error: 'type, amount, description, and date are required' });
@@ -60,6 +62,8 @@ export default async function handler(req, res) {
           date,
           isRecurring: isRecurring ? 1 : 0,
           recurringId: recurringId || null,
+          tags: tags && tags.length > 0 ? JSON.stringify(tags) : null,
+          notes: notes || null,
         })
         .eq('id', id)
         .select()
@@ -77,6 +81,8 @@ export default async function handler(req, res) {
         isRecurring: Boolean(data.isRecurring),
         bucketId: data.bucketId || undefined,
         recurringId: data.recurringId || undefined,
+        tags: data.tags ? (typeof data.tags === 'string' ? JSON.parse(data.tags) : data.tags) : undefined,
+        notes: data.notes || undefined,
       };
 
       return res.status(200).json(transaction);

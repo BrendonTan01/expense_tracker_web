@@ -1,12 +1,12 @@
-import { useState } from 'react';
-import { RecurringTransaction, Bucket, RecurringFrequency } from '../types';
-import { getNextOccurrence, formatDate } from '../utils/dateHelpers';
+import { useState, useMemo } from 'react';
+import { RecurringTransaction, Bucket, RecurringFrequency, Transaction } from '../types';
+import { getNextOccurrence, formatDate, shouldGenerateTransaction } from '../utils/dateHelpers';
 import TransactionForm from './TransactionForm';
-import { Transaction } from '../types';
 
 interface RecurringTransactionManagerProps {
   recurringTransactions: RecurringTransaction[];
   buckets: Bucket[];
+  transactions: Transaction[];
   onAdd: (recurring: RecurringTransaction) => void;
   onUpdate: (id: string, recurring: Partial<RecurringTransaction>) => void;
   onDelete: (id: string) => void;
@@ -15,10 +15,43 @@ interface RecurringTransactionManagerProps {
 export default function RecurringTransactionManager({
   recurringTransactions,
   buckets,
+  transactions,
   onAdd,
   onUpdate,
   onDelete,
 }: RecurringTransactionManagerProps) {
+  // Calculate status for each recurring transaction
+  const recurringStatus = useMemo(() => {
+    return recurringTransactions.map((recurring) => {
+      const generatedTransactions = transactions.filter(
+        (t) => t.recurringId === recurring.id
+      );
+      const isActive = shouldGenerateTransaction(
+        recurring.frequency,
+        recurring.startDate,
+        recurring.endDate,
+        recurring.lastApplied
+      );
+      const nextDate = getNextOccurrence(
+        recurring.frequency,
+        recurring.startDate,
+        recurring.lastApplied
+      );
+      const today = new Date().toISOString().split('T')[0];
+      const isOverdue = nextDate < today && isActive;
+
+      return {
+        recurring,
+        generatedCount: generatedTransactions.length,
+        isActive,
+        nextDate,
+        isOverdue,
+        lastGenerated: generatedTransactions.length > 0
+          ? generatedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date
+          : null,
+      };
+    });
+  }, [recurringTransactions, transactions]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<Transaction>>({});
@@ -130,26 +163,66 @@ export default function RecurringTransactionManager({
         {recurringTransactions.length === 0 ? (
           <p className="empty-state">No recurring transactions yet. Create one to get started!</p>
         ) : (
-          recurringTransactions.map((recurring) => {
+          recurringStatus.map((status) => {
             try {
+              const { recurring } = status;
               if (!recurring || !recurring.id || !recurring.transaction || !recurring.startDate) {
                 console.error('Invalid recurring transaction:', recurring);
                 return null;
               }
-
-              const nextDate = getNextOccurrence(
-                recurring.frequency,
-                recurring.startDate,
-                recurring.lastApplied
-              );
               
               return (
-                <div key={recurring.id} className="recurring-item">
+                <div 
+                  key={recurring.id} 
+                  className="recurring-item"
+                  style={{
+                    borderLeft: `4px solid ${status.isActive ? (status.isOverdue ? '#ef4444' : '#10b981') : '#94a3b8'}`,
+                    backgroundColor: status.isOverdue ? '#ffebee' : 'white',
+                  }}
+                >
                   <div className="recurring-info">
                     <div className="recurring-main">
-                      <span className={`badge badge-${recurring.transaction.type}`}>
-                        {recurring.transaction.type}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className={`badge badge-${recurring.transaction.type}`}>
+                          {recurring.transaction.type}
+                        </span>
+                        {status.isOverdue && (
+                          <span style={{ 
+                            backgroundColor: '#ef4444', 
+                            color: 'white', 
+                            padding: '2px 8px', 
+                            borderRadius: '4px', 
+                            fontSize: '12px',
+                            fontWeight: 600
+                          }}>
+                            OVERDUE
+                          </span>
+                        )}
+                        {!status.isActive && (
+                          <span style={{ 
+                            backgroundColor: '#94a3b8', 
+                            color: 'white', 
+                            padding: '2px 8px', 
+                            borderRadius: '4px', 
+                            fontSize: '12px',
+                            fontWeight: 600
+                          }}>
+                            INACTIVE
+                          </span>
+                        )}
+                        {status.isActive && !status.isOverdue && (
+                          <span style={{ 
+                            backgroundColor: '#10b981', 
+                            color: 'white', 
+                            padding: '2px 8px', 
+                            borderRadius: '4px', 
+                            fontSize: '12px',
+                            fontWeight: 600
+                          }}>
+                            ACTIVE
+                          </span>
+                        )}
+                      </div>
                       <strong>{recurring.transaction.description || 'No description'}</strong>
                       <span className="recurring-amount">
                         {recurring.transaction.type === 'income' ? '+' : '-'}
@@ -160,7 +233,15 @@ export default function RecurringTransactionManager({
                       <span>Frequency: {recurring.frequency}</span>
                       <span>Started: {formatDate(recurring.startDate)}</span>
                       {recurring.endDate && <span>Ends: {formatDate(recurring.endDate)}</span>}
-                      <span>Next: {formatDate(nextDate)}</span>
+                      <span>Next: {formatDate(status.nextDate)}</span>
+                      <span style={{ color: status.generatedCount > 0 ? '#10b981' : '#94a3b8' }}>
+                        Generated: {status.generatedCount} transaction{status.generatedCount !== 1 ? 's' : ''}
+                      </span>
+                      {status.lastGenerated && (
+                        <span style={{ fontSize: '12px', color: '#64748b' }}>
+                          Last: {formatDate(status.lastGenerated)}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="recurring-actions">
@@ -180,9 +261,9 @@ export default function RecurringTransactionManager({
                 </div>
               );
             } catch (error) {
-              console.error('Error rendering recurring transaction:', error, recurring);
+              console.error('Error rendering recurring transaction:', error, status);
               return (
-                <div key={recurring.id || 'error'} className="recurring-item" style={{ color: 'red' }}>
+                <div key={status.recurring.id || 'error'} className="recurring-item" style={{ color: 'red' }}>
                   Error displaying recurring transaction: {error instanceof Error ? error.message : 'Unknown error'}
                 </div>
               );
