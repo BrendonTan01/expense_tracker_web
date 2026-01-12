@@ -117,12 +117,16 @@ export const transactionsApi = {
 };
 
 // Recurring Transactions API
+const isValidRecurringTransaction = (r: RecurringTransaction | null): r is RecurringTransaction => {
+  return r !== null;
+};
+
 export const recurringApi = {
   getAll: async (): Promise<RecurringTransaction[]> => {
     const response = await fetch(`${API_BASE_URL}/recurring`);
     const recurring = await handleResponse<any[]>(response);
     // API already returns data in app format, just validate and ensure types are correct
-    return (recurring || []).map(r => {
+    const mapped: (RecurringTransaction | null)[] = (recurring || []).map(r => {
       // Validate required fields - data is already in app format with nested transaction
       if (!r || !r.id || !r.startDate || !r.frequency || !r.transaction) {
         console.warn('Invalid recurring transaction data:', r);
@@ -142,7 +146,8 @@ export const recurringApi = {
         endDate: r.endDate ? String(r.endDate) : undefined,
         lastApplied: r.lastApplied ? String(r.lastApplied) : undefined,
       };
-    }).filter((r): r is RecurringTransaction => r !== null);
+    });
+    return mapped.filter(isValidRecurringTransaction);
   },
   
   getById: async (id: string): Promise<RecurringTransaction> => {
