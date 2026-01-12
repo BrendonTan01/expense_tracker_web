@@ -106,6 +106,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
   const [useCustomRange, setUseCustomRange] = useState(false);
+  const [budgetFilter, setBudgetFilter] = useState<'all' | 'monthly' | 'yearly'>('all');
 
   const filteredTransactions = useMemo(() => {
     if (useCustomRange && customStartDate && customEndDate) {
@@ -210,6 +211,15 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
 
     return budgets
       .filter((budget) => {
+        // Filter by period type (all/monthly/yearly)
+        if (budgetFilter === 'monthly' && budget.period !== 'monthly') {
+          return false;
+        }
+        if (budgetFilter === 'yearly' && budget.period !== 'yearly') {
+          return false;
+        }
+        
+        // Filter by current period (only show active budgets)
         if (budget.period === 'monthly') {
           return budget.year === currentYear && budget.month === currentMonth;
         } else {
@@ -234,7 +244,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
           isOverBudget: bucketExpenses > budget.amount,
         };
       });
-  }, [budgets, filteredTransactions, buckets, period, useCustomRange, customStartDate, customEndDate]);
+  }, [budgets, filteredTransactions, buckets, period, useCustomRange, customStartDate, customEndDate, budgetFilter]);
 
   // Spending trends - compare current period with previous period
   const spendingTrends = useMemo(() => {
@@ -612,7 +622,19 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
 
       {budgetStatus.length > 0 && (
         <div className="budget-status" style={{ marginTop: '32px' }}>
-          <h3>Budget Status</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0 }}>Budget Status</h3>
+            <select
+              value={budgetFilter}
+              onChange={(e) => setBudgetFilter(e.target.value as 'all' | 'monthly' | 'yearly')}
+              className="input input-sm"
+              style={{ minWidth: '150px' }}
+            >
+              <option value="all">All Budgets</option>
+              <option value="monthly">Monthly Budgets</option>
+              <option value="yearly">Yearly Budgets</option>
+            </select>
+          </div>
           <div style={{ display: 'grid', gap: '16px', marginTop: '16px' }}>
             {budgetStatus.map((status) => (
               <div
@@ -636,6 +658,19 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
                       }}
                     />
                     <strong>{status.bucket?.name || 'Unknown'}</strong>
+                    <span
+                      style={{
+                        backgroundColor: status.budget.period === 'monthly' ? '#3b82f6' : '#8b5cf6',
+                        color: 'white',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {status.budget.period === 'monthly' ? 'Monthly' : 'Yearly'}
+                    </span>
                   </div>
                   <span style={{ color: status.isOverBudget ? '#ef4444' : '#10b981', fontWeight: 600 }}>
                     {status.isOverBudget ? 'Over Budget' : 'On Track'}
