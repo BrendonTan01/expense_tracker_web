@@ -56,8 +56,8 @@ export default function RecurringTransactionManager({
     setEditingId(recurring.id);
     setFormData(recurring.transaction);
     setFrequency(recurring.frequency);
-    setStartDate(recurring.startDate.split('T')[0]);
-    setEndDate(recurring.endDate?.split('T')[0] || '');
+    setStartDate(recurring.startDate ? recurring.startDate.split('T')[0] : new Date().toISOString().split('T')[0]);
+    setEndDate(recurring.endDate ? recurring.endDate.split('T')[0] : '');
     setShowForm(true);
   };
 
@@ -131,48 +131,63 @@ export default function RecurringTransactionManager({
           <p className="empty-state">No recurring transactions yet. Create one to get started!</p>
         ) : (
           recurringTransactions.map((recurring) => {
-            const nextDate = getNextOccurrence(
-              recurring.frequency,
-              recurring.startDate,
-              recurring.lastApplied
-            );
-            return (
-              <div key={recurring.id} className="recurring-item">
-                <div className="recurring-info">
-                  <div className="recurring-main">
-                    <span className={`badge badge-${recurring.transaction.type}`}>
-                      {recurring.transaction.type}
-                    </span>
-                    <strong>{recurring.transaction.description}</strong>
-                    <span className="recurring-amount">
-                      {recurring.transaction.type === 'income' ? '+' : '-'}
-                      ${recurring.transaction.amount.toFixed(2)}
-                    </span>
+            try {
+              if (!recurring || !recurring.id || !recurring.transaction || !recurring.startDate) {
+                console.error('Invalid recurring transaction:', recurring);
+                return null;
+              }
+
+              const nextDate = getNextOccurrence(
+                recurring.frequency,
+                recurring.startDate,
+                recurring.lastApplied
+              );
+              
+              return (
+                <div key={recurring.id} className="recurring-item">
+                  <div className="recurring-info">
+                    <div className="recurring-main">
+                      <span className={`badge badge-${recurring.transaction.type}`}>
+                        {recurring.transaction.type}
+                      </span>
+                      <strong>{recurring.transaction.description || 'No description'}</strong>
+                      <span className="recurring-amount">
+                        {recurring.transaction.type === 'income' ? '+' : '-'}
+                        ${(recurring.transaction.amount || 0).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="recurring-details">
+                      <span>Frequency: {recurring.frequency}</span>
+                      <span>Started: {formatDate(recurring.startDate)}</span>
+                      {recurring.endDate && <span>Ends: {formatDate(recurring.endDate)}</span>}
+                      <span>Next: {formatDate(nextDate)}</span>
+                    </div>
                   </div>
-                  <div className="recurring-details">
-                    <span>Frequency: {recurring.frequency}</span>
-                    <span>Started: {formatDate(recurring.startDate)}</span>
-                    {recurring.endDate && <span>Ends: {formatDate(recurring.endDate)}</span>}
-                    <span>Next: {formatDate(nextDate)}</span>
+                  <div className="recurring-actions">
+                    <button
+                      onClick={() => handleEdit(recurring)}
+                      className="btn btn-sm btn-secondary"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => onDelete(recurring.id)}
+                      className="btn btn-sm btn-danger"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
-                <div className="recurring-actions">
-                  <button
-                    onClick={() => handleEdit(recurring)}
-                    className="btn btn-sm btn-secondary"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => onDelete(recurring.id)}
-                    className="btn btn-sm btn-danger"
-                  >
-                    Delete
-                  </button>
+              );
+            } catch (error) {
+              console.error('Error rendering recurring transaction:', error, recurring);
+              return (
+                <div key={recurring.id || 'error'} className="recurring-item" style={{ color: 'red' }}>
+                  Error displaying recurring transaction: {error instanceof Error ? error.message : 'Unknown error'}
                 </div>
-              </div>
-            );
-          })
+              );
+            }
+          }).filter(Boolean)
         )}
       </div>
     </div>

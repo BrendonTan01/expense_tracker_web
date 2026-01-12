@@ -5,26 +5,43 @@ export function getNextOccurrence(
   startDate: string,
   lastApplied?: string
 ): string {
-  const start = new Date(startDate);
-  const base = lastApplied ? new Date(lastApplied) : start;
-  const next = new Date(base);
-
-  switch (frequency) {
-    case 'daily':
-      next.setDate(next.getDate() + 1);
-      break;
-    case 'weekly':
-      next.setDate(next.getDate() + 7);
-      break;
-    case 'monthly':
-      next.setMonth(next.getMonth() + 1);
-      break;
-    case 'yearly':
-      next.setFullYear(next.getFullYear() + 1);
-      break;
+  if (!startDate) {
+    return new Date().toISOString().split('T')[0];
   }
+  
+  try {
+    const start = new Date(startDate);
+    if (isNaN(start.getTime())) {
+      return new Date().toISOString().split('T')[0];
+    }
+    
+    const base = lastApplied ? new Date(lastApplied) : start;
+    if (isNaN(base.getTime())) {
+      return start.toISOString().split('T')[0];
+    }
+    
+    const next = new Date(base);
 
-  return next.toISOString().split('T')[0];
+    switch (frequency) {
+      case 'daily':
+        next.setDate(next.getDate() + 1);
+        break;
+      case 'weekly':
+        next.setDate(next.getDate() + 7);
+        break;
+      case 'monthly':
+        next.setMonth(next.getMonth() + 1);
+        break;
+      case 'yearly':
+        next.setFullYear(next.getFullYear() + 1);
+        break;
+    }
+
+    return next.toISOString().split('T')[0];
+  } catch (error) {
+    console.error('Error calculating next occurrence:', error);
+    return new Date().toISOString().split('T')[0];
+  }
 }
 
 export function shouldGenerateTransaction(
@@ -66,8 +83,20 @@ export function shouldGenerateTransaction(
 }
 
 export function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString();
+  if (!dateString) {
+    return 'Invalid date';
+  }
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      return 'Invalid date';
+    }
+    return date.toLocaleDateString();
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Invalid date';
+  }
 }
 
 export function formatCurrency(amount: number): string {

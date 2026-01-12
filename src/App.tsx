@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component, ReactNode } from 'react';
 import { AppState, Transaction, Bucket, RecurringTransaction } from './types';
 import { generateId } from './utils/storage';
 import { appStateApi, bucketsApi, transactionsApi, recurringApi } from './utils/api';
@@ -10,6 +10,38 @@ import RecurringTransactionManager from './components/RecurringTransactionManage
 import Summary from './components/Summary';
 
 type Tab = 'summary' | 'transactions' | 'buckets' | 'recurring';
+
+// Error Boundary Component
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('Error caught by boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '2rem', textAlign: 'center' }}>
+          <h2>Something went wrong</h2>
+          <p>{this.state.error?.message || 'An unexpected error occurred'}</p>
+          <button onClick={() => this.setState({ hasError: false, error: null })}>
+            Try again
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 function App() {
   const [state, setState] = useState<AppState>({
@@ -357,13 +389,15 @@ function App() {
         )}
 
         {activeTab === 'recurring' && (
-          <RecurringTransactionManager
-            recurringTransactions={state.recurringTransactions}
-            buckets={state.buckets}
-            onAdd={handleAddRecurring}
-            onUpdate={handleUpdateRecurring}
-            onDelete={handleDeleteRecurring}
-          />
+          <ErrorBoundary>
+            <RecurringTransactionManager
+              recurringTransactions={state.recurringTransactions || []}
+              buckets={state.buckets || []}
+              onAdd={handleAddRecurring}
+              onUpdate={handleUpdateRecurring}
+              onDelete={handleDeleteRecurring}
+            />
+          </ErrorBoundary>
         )}
       </main>
     </div>
