@@ -10,6 +10,8 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  console.log(`[buckets] ${req.method} request to ${req.url}`);
+
   try {
     if (req.method === 'GET') {
       // GET all buckets

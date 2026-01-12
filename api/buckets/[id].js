@@ -11,6 +11,8 @@ export default async function handler(req, res) {
   }
 
   const { id } = req.query;
+  
+  console.log(`[buckets/[id]] ${req.method} request for id: ${id}`);
 
   try {
     if (req.method === 'GET') {
@@ -55,12 +57,19 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
+      if (!id) {
+        return res.status(400).json({ error: 'id is required' });
+      }
+
       const { error } = await supabase
         .from('buckets')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Delete bucket error:', error);
+        throw error;
+      }
 
       return res.status(204).send();
     }
