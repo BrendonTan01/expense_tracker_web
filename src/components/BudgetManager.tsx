@@ -23,6 +23,7 @@ export default function BudgetManager({
   const [period, setPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [month, setMonth] = useState((new Date().getMonth() + 1).toString());
+  const [applyToAllMonths, setApplyToAllMonths] = useState(true);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,19 +31,59 @@ export default function BudgetManager({
     if (isNaN(numAmount) || numAmount <= 0) return;
     if (!bucketId) return;
 
-    const budgetData: Budget = {
-      id: editingId || Date.now().toString(),
-      bucketId,
-      amount: numAmount,
-      period,
-      year: parseInt(year),
-      month: period === 'monthly' ? parseInt(month) : undefined,
-    };
-
     if (editingId) {
+      // Editing: create single budget entry
+      const budgetData: Budget = {
+        id: editingId,
+        bucketId,
+        amount: numAmount,
+        period,
+        year: parseInt(year),
+        month: period === 'monthly' ? parseInt(month) : undefined,
+      };
       onUpdate(editingId, budgetData);
     } else {
-      onAdd(budgetData);
+      // Creating new budget
+      if (period === 'yearly') {
+        // Yearly: create single budget entry for the entire year
+        const budgetData: Budget = {
+          id: Date.now().toString(),
+          bucketId,
+          amount: numAmount,
+          period: 'yearly',
+          year: parseInt(year),
+          month: undefined,
+        };
+        onAdd(budgetData);
+      } else if (period === 'monthly') {
+        // Monthly: create budget entries based on selection
+        if (applyToAllMonths) {
+          // Create 12 budget entries, one for each month
+          const baseTime = Date.now();
+          for (let m = 1; m <= 12; m++) {
+            const budgetData: Budget = {
+              id: `${baseTime}-${m}`,
+              bucketId,
+              amount: numAmount,
+              period: 'monthly',
+              year: parseInt(year),
+              month: m,
+            };
+            onAdd(budgetData);
+          }
+        } else {
+          // Create single budget entry for selected month
+          const budgetData: Budget = {
+            id: Date.now().toString(),
+            bucketId,
+            amount: numAmount,
+            period: 'monthly',
+            year: parseInt(year),
+            month: parseInt(month),
+          };
+          onAdd(budgetData);
+        }
+      }
     }
 
     resetForm();
@@ -56,6 +97,7 @@ export default function BudgetManager({
     setPeriod('monthly');
     setYear(new Date().getFullYear().toString());
     setMonth((new Date().getMonth() + 1).toString());
+    setApplyToAllMonths(true);
   };
 
   const handleEdit = (budget: Budget) => {
@@ -65,6 +107,7 @@ export default function BudgetManager({
     setPeriod(budget.period);
     setYear(budget.year.toString());
     setMonth(budget.month?.toString() || (new Date().getMonth() + 1).toString());
+    setApplyToAllMonths(false); // When editing, show single month selector
     setShowForm(true);
   };
 
@@ -161,24 +204,45 @@ export default function BudgetManager({
           </div>
 
           {period === 'monthly' && (
-            <div className="form-group">
-              <label>Month</label>
-              <select
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-                className="input"
-                required
-              >
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
-                  const date = new Date(2000, m - 1, 1);
-                  return (
-                    <option key={m} value={m.toString()}>
-                      {date.toLocaleDateString('en-US', { month: 'long' })}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
+            <>
+              <div className="form-group">
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={applyToAllMonths}
+                    onChange={(e) => setApplyToAllMonths(e.target.checked)}
+                    disabled={!!editingId}
+                  />
+                  <span>Apply to all months</span>
+                </label>
+                {editingId && (
+                  <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                    (Cannot change when editing)
+                  </p>
+                )}
+              </div>
+
+              {!applyToAllMonths && (
+                <div className="form-group">
+                  <label>Month</label>
+                  <select
+                    value={month}
+                    onChange={(e) => setMonth(e.target.value)}
+                    className="input"
+                    required
+                  >
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
+                      const date = new Date(2000, m - 1, 1);
+                      return (
+                        <option key={m} value={m.toString()}>
+                          {date.toLocaleDateString('en-US', { month: 'long' })}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
+            </>
           )}
 
           <div className="form-actions">
