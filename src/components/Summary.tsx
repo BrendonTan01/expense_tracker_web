@@ -270,7 +270,7 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
                     borderRadius: '8px',
                     padding: '12px',
                   }}
-                  formatter={(value: number, name: string) => {
+                  formatter={(value: any, _name: any) => {
                     if (typeof value === 'number') {
                       return formatCurrency(value);
                     }
