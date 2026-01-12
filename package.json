@@ -1,0 +1,29 @@
+{
+  "name": "expense-tracker",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "server": "node backend/server.js",
+    "dev:server": "node --watch backend/server.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\"",
+    "start": "NODE_ENV=production node backend/server.js",
+    "build:start": "npm run build && npm run start"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@supabase/supabase-js": "^2.39.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.2.2",
+    "vite": "^7.3.1",
+    "concurrently": "^8.2.2"
+  }
+}
