@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Transaction, Bucket } from '../types';
 import { formatCurrency } from '../utils/dateHelpers';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps } from 'recharts';
 
 interface SummaryProps {
   transactions: Transaction[];
@@ -13,8 +13,78 @@ type Period = 'all' | 'month' | 'year' | 'custom';
 interface ChartDataPoint {
   period: string;
   income: number;
-  [key: string]: string | number; // For bucket expenses
+  expenses: number;
+  bucketBreakdown?: Record<string, number>; // For tooltip breakdown
 }
+
+// Custom Tooltip Component
+const CustomTooltip = ({ active, payload, label, buckets }: TooltipProps<number, string> & { buckets: Bucket[] }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload as ChartDataPoint;
+    const incomeValue = payload.find(p => p.dataKey === 'income')?.value as number || 0;
+    const expenseValue = payload.find(p => p.dataKey === 'expenses')?.value as number || 0;
+    
+    return (
+      <div style={{
+        backgroundColor: 'white',
+        border: '1px solid #e2e8f0',
+        borderRadius: '8px',
+        padding: '12px',
+        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+      }}>
+        <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>{`Period: ${label}`}</p>
+        {incomeValue > 0 && (
+          <p style={{ margin: '4px 0', color: '#10b981' }}>
+            Income: {formatCurrency(incomeValue)}
+          </p>
+        )}
+        {expenseValue > 0 && (
+          <>
+            <p style={{ margin: '4px 0 8px 0', color: '#ef4444' }}>
+              Expenses: {formatCurrency(expenseValue)}
+            </p>
+            {data.bucketBreakdown && Object.keys(data.bucketBreakdown).length > 0 && (
+              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e2e8f0' }}>
+                <p style={{ margin: '0 0 4px 0', fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
+                  By Bucket:
+                </p>
+                {Object.entries(data.bucketBreakdown)
+                  .sort(([, a], [, b]) => (b as number) - (a as number))
+                  .map(([bucketId, amount]) => {
+                    const bucket = bucketId === 'no-bucket' 
+                      ? null 
+                      : buckets.find(b => b.id === bucketId);
+                    const bucketName = bucket?.name || 'No Bucket';
+                    const bucketColor = bucket?.color || '#94a3b8';
+                    
+                    return (
+                      <div key={bucketId} style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '8px', 
+                        margin: '4px 0',
+                        fontSize: '12px'
+                      }}>
+                        <span style={{
+                          width: '12px',
+                          height: '12px',
+                          backgroundColor: bucketColor,
+                          borderRadius: '2px',
+                          display: 'inline-block',
+                        }} />
+                        <span>{bucketName}: {formatCurrency(amount as number)}</span>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
 
 export default function Summary({ transactions, buckets }: SummaryProps) {
   const [period, setPeriod] = useState<Period>('year');
@@ -36,22 +106,32 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
     if (period === 'all') return transactions;
 
     const now = new Date();
-    const filterDate = new Date();
+    now.setHours(0, 0, 0, 0);
+    let startDate: Date;
+    let endDate: Date;
 
     if (period === 'month') {
-      // Set to the first day of last month
-      filterDate.setFullYear(now.getFullYear(), now.getMonth() - 1, 1);
-      filterDate.setHours(0, 0, 0, 0);
+      // Last month: first day to last day of previous month
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      startDate = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1);
+      startDate.setHours(0, 0, 0, 0);
+      // Last day of last month
+      endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+      endDate.setHours(23, 59, 59, 999);
     } else if (period === 'year') {
-      // Set to January 1st of last year
-      filterDate.setFullYear(now.getFullYear() - 1, 0, 1);
-      filterDate.setHours(0, 0, 0, 0);
+      // Last year: January 1 to December 31 of previous year
+      const lastYear = now.getFullYear() - 1;
+      startDate = new Date(lastYear, 0, 1);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(lastYear, 11, 31);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      return transactions;
     }
 
     return transactions.filter((t) => {
       const transactionDate = new Date(t.date);
-      transactionDate.setHours(0, 0, 0, 0);
-      return transactionDate >= filterDate;
+      return transactionDate >= startDate && transactionDate <= endDate;
     });
   }, [transactions, period, useCustomRange, customStartDate, customEndDate]);
 
@@ -107,7 +187,7 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
     // Group by month if range is less than 2 years, otherwise by year
     const groupByMonth = diffMonths <= 24;
 
-    const grouped: Record<string, { income: number; expenses: Record<string, number> }> = {};
+    const grouped: Record<string, { income: number; expenses: number; bucketBreakdown: Record<string, number> }> = {};
 
     filteredTransactions.forEach((t) => {
       const date = new Date(t.date);
@@ -120,18 +200,15 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
       }
 
       if (!grouped[key]) {
-        grouped[key] = { income: 0, expenses: {} };
+        grouped[key] = { income: 0, expenses: 0, bucketBreakdown: {} };
       }
 
       if (t.type === 'income') {
         grouped[key].income += t.amount;
       } else if (t.type === 'expense') {
-        if (t.bucketId) {
-          grouped[key].expenses[t.bucketId] = (grouped[key].expenses[t.bucketId] || 0) + t.amount;
-        } else {
-          // Handle expenses without buckets
-          grouped[key].expenses['no-bucket'] = (grouped[key].expenses['no-bucket'] || 0) + t.amount;
-        }
+        grouped[key].expenses += t.amount;
+        const bucketKey = t.bucketId || 'no-bucket';
+        grouped[key].bucketBreakdown[bucketKey] = (grouped[key].bucketBreakdown[bucketKey] || 0) + t.amount;
       }
     });
 
@@ -139,21 +216,14 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
     const data: ChartDataPoint[] = Object.entries(grouped)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([period, data]) => {
-        const point: ChartDataPoint = {
+        return {
           period: groupByMonth 
             ? new Date(period + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
             : period,
           income: data.income,
+          expenses: data.expenses,
+          bucketBreakdown: data.bucketBreakdown,
         };
-
-        // Add each bucket as a separate field
-        buckets.forEach((bucket) => {
-          point[`expense_${bucket.id}`] = data.expenses[bucket.id] || 0;
-        });
-        // Add expenses without buckets
-        point['expense_no-bucket'] = data.expenses['no-bucket'] || 0;
-
-        return point;
       });
 
     return data;
@@ -271,68 +341,19 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
                     return `$${value}`;
                   }}
                 />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'white',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    padding: '12px',
-                  }}
-                  formatter={(value: any, name: any) => {
-                    if (typeof value === 'number' && value > 0) {
-                      // In recharts, the name parameter can be either the name prop or dataKey
-                      // We need to handle both cases
-                      let displayName = name;
-                      
-                      // If name is a dataKey (starts with "expense_"), convert it to bucket name
-                      if (name && typeof name === 'string' && name.startsWith('expense_')) {
-                        const bucketId = name.replace('expense_', '');
-                        if (bucketId === 'no-bucket') {
-                          displayName = 'No Bucket';
-                        } else {
-                          const bucket = buckets.find(b => b.id === bucketId);
-                          displayName = bucket?.name || 'Unknown';
-                        }
-                      } else if (name === 'income' || name === 'Income') {
-                        displayName = 'Income';
-                      }
-                      
-                      return [formatCurrency(value), displayName];
-                    }
-                    return null;
-                  }}
-                  labelFormatter={(label) => `Period: ${label}`}
-                />
-                <Legend
-                  wrapperStyle={{ paddingTop: '20px' }}
-                  formatter={(value: string) => {
-                    if (value === 'income') return 'Income';
-                    const bucketId = value.replace('expense_', '');
-                    if (bucketId === 'no-bucket') return 'No Bucket';
-                    const bucket = buckets.find(b => b.id === bucketId);
-                    return bucket?.name || 'Unknown';
-                  }}
-                />
+                <Tooltip content={<CustomTooltip buckets={buckets} />} />
+                <Legend />
                 <Bar 
                   dataKey="income" 
                   fill="#10b981" 
-                  name="Income" 
+                  name="Income"
                   radius={[4, 4, 0, 0]}
                 />
-                {buckets.map((bucket) => (
-                  <Bar
-                    key={bucket.id}
-                    dataKey={`expense_${bucket.id}`}
-                    stackId="expenses"
-                    fill={bucket.color || '#94a3b8'}
-                    name={bucket.name}
-                  />
-                ))}
                 <Bar
-                  dataKey="expense_no-bucket"
-                  stackId="expenses"
-                  fill="#94a3b8"
-                  name="No Bucket"
+                  dataKey="expenses"
+                  fill="#ef4444"
+                  name="Expenses"
+                  radius={[4, 4, 0, 0]}
                 />
               </BarChart>
             </ResponsiveContainer>
