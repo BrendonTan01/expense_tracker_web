@@ -37,6 +37,19 @@ export interface Budget {
   month?: number; // 1-12 for monthly, undefined for yearly
 }
 
+export interface MonthlySummary {
+  id: string;
+  year: number;
+  month: number; // 1-12
+  summary: string; // Text summary/notes for the month
+}
+
+export interface YearlySummary {
+  id: string;
+  year: number;
+  summary: string; // Text summary/notes for the year
+}
+
 export interface AppState {
   buckets: Bucket[];
   transactions: Transaction[];

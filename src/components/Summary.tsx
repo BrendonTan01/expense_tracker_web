@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Transaction, Bucket, Budget } from '../types';
 import { formatCurrency } from '../utils/dateHelpers';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import SummaryNotes from './SummaryNotes';
 
 interface SummaryProps {
   transactions: Transaction[];
@@ -776,6 +777,57 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
           </div>
         </div>
       )}
+
+      {/* Summary Notes Section */}
+      {(() => {
+        const now = new Date();
+        let displayYear: number | null = null;
+        let displayMonth: number | null = null;
+        let summaryType: 'monthly' | 'yearly' | null = null;
+
+        if (period === 'thisMonth' || period === 'month') {
+          const monthDate = period === 'thisMonth' 
+            ? new Date(now.getFullYear(), now.getMonth(), 1)
+            : new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          displayYear = monthDate.getFullYear();
+          displayMonth = monthDate.getMonth() + 1;
+          summaryType = 'monthly';
+        } else if (period === 'thisYear' || period === 'year') {
+          const yearDate = period === 'thisYear'
+            ? new Date(now.getFullYear(), 0, 1)
+            : new Date(now.getFullYear() - 1, 0, 1);
+          displayYear = yearDate.getFullYear();
+          summaryType = 'yearly';
+        } else if (useCustomRange && customStartDate && customEndDate) {
+          const start = new Date(customStartDate);
+          const end = new Date(customEndDate);
+          const diffTime = Math.abs(end.getTime() - start.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          // If custom range is within a single month, show monthly summary
+          if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear() && diffDays <= 31) {
+            displayYear = start.getFullYear();
+            displayMonth = start.getMonth() + 1;
+            summaryType = 'monthly';
+          } else if (start.getFullYear() === end.getFullYear() && start.getMonth() === 0 && end.getMonth() === 11) {
+            // If custom range is the entire year
+            displayYear = start.getFullYear();
+            summaryType = 'yearly';
+          }
+        }
+
+        if (summaryType && displayYear) {
+          return (
+            <SummaryNotes
+              type={summaryType}
+              year={displayYear}
+              month={displayMonth || undefined}
+            />
+          );
+        }
+
+        return null;
+      })()}
     </div>
   );
 }

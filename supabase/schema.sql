@@ -46,8 +46,26 @@ CREATE TABLE IF NOT EXISTS budgets (
   FOREIGN KEY (bucketId) REFERENCES buckets(id) ON DELETE CASCADE
 );
 
+-- Create monthly_summaries table
+CREATE TABLE IF NOT EXISTS monthly_summaries (
+  id TEXT PRIMARY KEY,
+  year INTEGER NOT NULL,
+  month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
+  summary TEXT,
+  UNIQUE(year, month)
+);
+
+-- Create yearly_summaries table
+CREATE TABLE IF NOT EXISTS yearly_summaries (
+  id TEXT PRIMARY KEY,
+  year INTEGER NOT NULL UNIQUE,
+  summary TEXT
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_transactions_recurring ON transactions(recurringId);
 CREATE INDEX IF NOT EXISTS idx_recurring_start_date ON recurring_transactions(startDate);
 CREATE INDEX IF NOT EXISTS idx_budgets_bucket_period ON budgets(bucketId, period, year, month);
+CREATE INDEX IF NOT EXISTS idx_monthly_summaries_year_month ON monthly_summaries(year, month);
+CREATE INDEX IF NOT EXISTS idx_yearly_summaries_year ON yearly_summaries(year);

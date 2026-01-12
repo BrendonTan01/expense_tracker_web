@@ -52,6 +52,7 @@ function App() {
     budgets: [],
   });
   const [activeTab, setActiveTab] = useState<Tab>('summary');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -346,6 +347,21 @@ function App() {
     );
   }
 
+  // Close settings dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.settings-dropdown')) {
+        setSettingsOpen(false);
+      }
+    };
+
+    if (settingsOpen) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [settingsOpen]);
+
   return (
     <div className="app">
       {error && (
@@ -370,34 +386,65 @@ function App() {
         <nav className="tabs">
           <button
             className={`tab ${activeTab === 'summary' ? 'active' : ''}`}
-            onClick={() => setActiveTab('summary')}
+            onClick={() => {
+              setActiveTab('summary');
+              setSettingsOpen(false);
+            }}
           >
             Summary
           </button>
           <button
             className={`tab ${activeTab === 'transactions' ? 'active' : ''}`}
-            onClick={() => setActiveTab('transactions')}
+            onClick={() => {
+              setActiveTab('transactions');
+              setSettingsOpen(false);
+            }}
           >
             Transactions
           </button>
-          <button
-            className={`tab ${activeTab === 'buckets' ? 'active' : ''}`}
-            onClick={() => setActiveTab('buckets')}
-          >
-            Buckets
-          </button>
-          <button
-            className={`tab ${activeTab === 'recurring' ? 'active' : ''}`}
-            onClick={() => setActiveTab('recurring')}
-          >
-            Recurring
-          </button>
-          <button
-            className={`tab ${activeTab === 'budgets' ? 'active' : ''}`}
-            onClick={() => setActiveTab('budgets')}
-          >
-            Budgets
-          </button>
+          <div className="settings-dropdown">
+            <button
+              className={`tab settings-tab ${['buckets', 'recurring', 'budgets'].includes(activeTab) ? 'active' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSettingsOpen(!settingsOpen);
+              }}
+            >
+              Settings
+              <span style={{ marginLeft: '6px', fontSize: '12px' }}>▼</span>
+            </button>
+            {settingsOpen && (
+              <div className="settings-dropdown-menu">
+                <button
+                  className={`settings-dropdown-item ${activeTab === 'buckets' ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab('buckets');
+                    setSettingsOpen(false);
+                  }}
+                >
+                  Buckets
+                </button>
+                <button
+                  className={`settings-dropdown-item ${activeTab === 'recurring' ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab('recurring');
+                    setSettingsOpen(false);
+                  }}
+                >
+                  Recurring
+                </button>
+                <button
+                  className={`settings-dropdown-item ${activeTab === 'budgets' ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab('budgets');
+                    setSettingsOpen(false);
+                  }}
+                >
+                  Budgets
+                </button>
+              </div>
+            )}
+          </div>
         </nav>
       </header>
 

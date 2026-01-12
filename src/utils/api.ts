@@ -1,4 +1,4 @@
-import { AppState, Bucket, Transaction, RecurringTransaction, Budget } from '../types';
+import { AppState, Bucket, Transaction, RecurringTransaction, Budget, MonthlySummary, YearlySummary } from '../types';
 
 // Use relative URLs for API calls (works with Vercel serverless functions)
 const API_BASE_URL = '/api';
@@ -280,6 +280,80 @@ export const budgetsApi = {
   
   delete: async (id: string): Promise<void> => {
     const response = await fetch(`${API_BASE_URL}/budgets/${id}`, {
+      method: 'DELETE',
+    });
+    return handleResponse<void>(response);
+  },
+};
+
+// Summaries API
+export const summariesApi = {
+  getAll: async (params?: { type?: 'monthly' | 'yearly'; year?: number; month?: number }): Promise<{ monthly: MonthlySummary[]; yearly: YearlySummary[] } | MonthlySummary[] | YearlySummary[]> => {
+    const queryParams = new URLSearchParams();
+    if (params?.type) queryParams.append('type', params.type);
+    if (params?.year) queryParams.append('year', params.year.toString());
+    if (params?.month) queryParams.append('month', params.month.toString());
+    
+    const url = `${API_BASE_URL}/summaries${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+    const response = await fetch(url);
+    return handleResponse<any>(response);
+  },
+  
+  getMonthly: async (year?: number, month?: number): Promise<MonthlySummary[]> => {
+    const queryParams = new URLSearchParams();
+    queryParams.append('type', 'monthly');
+    if (year) queryParams.append('year', year.toString());
+    if (month) queryParams.append('month', month.toString());
+    
+    const url = `${API_BASE_URL}/summaries?${queryParams.toString()}`;
+    const response = await fetch(url);
+    return handleResponse<MonthlySummary[]>(response);
+  },
+  
+  getYearly: async (year?: number): Promise<YearlySummary[]> => {
+    const queryParams = new URLSearchParams();
+    queryParams.append('type', 'yearly');
+    if (year) queryParams.append('year', year.toString());
+    
+    const url = `${API_BASE_URL}/summaries?${queryParams.toString()}`;
+    const response = await fetch(url);
+    return handleResponse<YearlySummary[]>(response);
+  },
+  
+  getById: async (id: string): Promise<MonthlySummary | YearlySummary> => {
+    const response = await fetch(`${API_BASE_URL}/summaries/${id}`);
+    return handleResponse<MonthlySummary | YearlySummary>(response);
+  },
+  
+  create: async (summary: MonthlySummary | YearlySummary): Promise<MonthlySummary | YearlySummary> => {
+    const type = 'month' in summary ? 'monthly' : 'yearly';
+    const body = {
+      id: summary.id,
+      type,
+      year: summary.year,
+      summary: summary.summary,
+      ...(type === 'monthly' && { month: (summary as MonthlySummary).month }),
+    };
+    
+    const response = await fetch(`${API_BASE_URL}/summaries`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return handleResponse<MonthlySummary | YearlySummary>(response);
+  },
+  
+  update: async (id: string, summary: string, type: 'monthly' | 'yearly'): Promise<MonthlySummary | YearlySummary> => {
+    const response = await fetch(`${API_BASE_URL}/summaries/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ summary, type }),
+    });
+    return handleResponse<MonthlySummary | YearlySummary>(response);
+  },
+  
+  delete: async (id: string): Promise<void> => {
+    const response = await fetch(`${API_BASE_URL}/summaries/${id}`, {
       method: 'DELETE',
     });
     return handleResponse<void>(response);
