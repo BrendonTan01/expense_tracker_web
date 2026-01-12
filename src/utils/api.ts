@@ -121,10 +121,10 @@ export const recurringApi = {
   getAll: async (): Promise<RecurringTransaction[]> => {
     const response = await fetch(`${API_BASE_URL}/recurring`);
     const recurring = await handleResponse<any[]>(response);
-    // Transform database format to app format with validation
+    // API already returns data in app format, just validate and ensure types are correct
     return (recurring || []).map(r => {
-      // Validate required fields
-      if (!r || !r.id || !r.startDate || !r.frequency) {
+      // Validate required fields - data is already in app format with nested transaction
+      if (!r || !r.id || !r.startDate || !r.frequency || !r.transaction) {
         console.warn('Invalid recurring transaction data:', r);
         return null;
       }
@@ -132,10 +132,10 @@ export const recurringApi = {
       return {
         id: String(r.id),
         transaction: {
-          type: r.type || 'expense',
-          amount: Number(r.amount) || 0,
-          description: String(r.description || ''),
-          bucketId: r.bucketId || undefined,
+          type: r.transaction.type || 'expense',
+          amount: Number(r.transaction.amount) || 0,
+          description: String(r.transaction.description || ''),
+          bucketId: r.transaction.bucketId || undefined,
         },
         frequency: r.frequency,
         startDate: String(r.startDate),
@@ -148,18 +148,19 @@ export const recurringApi = {
   getById: async (id: string): Promise<RecurringTransaction> => {
     const response = await fetch(`${API_BASE_URL}/recurring/${id}`);
     const r = await handleResponse<any>(response);
+    // API already returns data in app format with nested transaction
     return {
-      id: r.id,
+      id: String(r.id),
       transaction: {
-        type: r.type,
-        amount: r.amount,
-        description: r.description,
-        bucketId: r.bucketId || undefined,
+        type: r.transaction?.type || r.type || 'expense',
+        amount: Number(r.transaction?.amount || r.amount || 0),
+        description: String(r.transaction?.description || r.description || ''),
+        bucketId: r.transaction?.bucketId || r.bucketId || undefined,
       },
       frequency: r.frequency,
-      startDate: r.startDate,
-      endDate: r.endDate || undefined,
-      lastApplied: r.lastApplied || undefined,
+      startDate: String(r.startDate),
+      endDate: r.endDate ? String(r.endDate) : undefined,
+      lastApplied: r.lastApplied ? String(r.lastApplied) : undefined,
     };
   },
   
@@ -170,33 +171,14 @@ export const recurringApi = {
       body: JSON.stringify(recurring),
     });
     const r = await handleResponse<any>(response);
-    
-    // Handle both direct response and nested transaction format
-    if (r.transaction) {
-      // Already in app format
-      return {
-        id: String(r.id),
-        transaction: {
-          type: r.transaction.type || r.type || 'expense',
-          amount: Number(r.transaction.amount || r.amount || 0),
-          description: String(r.transaction.description || r.description || ''),
-          bucketId: r.transaction.bucketId || r.bucketId || undefined,
-        },
-        frequency: r.frequency,
-        startDate: String(r.startDate),
-        endDate: r.endDate ? String(r.endDate) : undefined,
-        lastApplied: r.lastApplied ? String(r.lastApplied) : undefined,
-      };
-    }
-    
-    // Database format
+    // API already returns data in app format with nested transaction
     return {
       id: String(r.id),
       transaction: {
-        type: r.type || 'expense',
-        amount: Number(r.amount || 0),
-        description: String(r.description || ''),
-        bucketId: r.bucketId || undefined,
+        type: r.transaction?.type || 'expense',
+        amount: Number(r.transaction?.amount || 0),
+        description: String(r.transaction?.description || ''),
+        bucketId: r.transaction?.bucketId || undefined,
       },
       frequency: r.frequency,
       startDate: String(r.startDate),
@@ -218,18 +200,19 @@ export const recurringApi = {
       body: JSON.stringify(payload),
     });
     const r = await handleResponse<any>(response);
+    // API already returns data in app format with nested transaction
     return {
-      id: r.id,
+      id: String(r.id),
       transaction: {
-        type: r.type,
-        amount: r.amount,
-        description: r.description,
-        bucketId: r.bucketId || undefined,
+        type: r.transaction?.type || r.type || 'expense',
+        amount: Number(r.transaction?.amount || r.amount || 0),
+        description: String(r.transaction?.description || r.description || ''),
+        bucketId: r.transaction?.bucketId || r.bucketId || undefined,
       },
       frequency: r.frequency,
-      startDate: r.startDate,
-      endDate: r.endDate || undefined,
-      lastApplied: r.lastApplied || undefined,
+      startDate: String(r.startDate),
+      endDate: r.endDate ? String(r.endDate) : undefined,
+      lastApplied: r.lastApplied ? String(r.lastApplied) : undefined,
     };
   },
   
