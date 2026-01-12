@@ -23,6 +23,9 @@ export default function TransactionForm({
   const [date, setDate] = useState(
     initialTransaction?.date ? initialTransaction.date.split('T')[0] : new Date().toISOString().split('T')[0]
   );
+  const [tags, setTags] = useState<string[]>(initialTransaction?.tags || []);
+  const [tagInput, setTagInput] = useState('');
+  const [notes, setNotes] = useState(initialTransaction?.notes || '');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +39,8 @@ export default function TransactionForm({
       description,
       bucketId: type === 'expense' ? bucketId : undefined,
       date,
+      tags: tags.length > 0 ? tags : undefined,
+      notes: notes || undefined,
     });
 
     // Reset form if not editing
@@ -44,6 +49,9 @@ export default function TransactionForm({
       setDescription('');
       setBucketId('');
       setDate(new Date().toISOString().split('T')[0]);
+      setTags([]);
+      setTagInput('');
+      setNotes('');
     }
   };
 
@@ -127,6 +135,71 @@ export default function TransactionForm({
           onChange={(e) => setDate(e.target.value)}
           className="input"
           required
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Tags (press Enter to add)</label>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+          {tags.map((tag, index) => (
+            <span
+              key={index}
+              className="tag"
+              style={{
+                backgroundColor: '#e2e8f0',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontSize: '14px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              {tag}
+              <button
+                type="button"
+                onClick={() => setTags(tags.filter((_, i) => i !== index))}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  color: '#64748b',
+                  padding: 0,
+                  marginLeft: '4px',
+                }}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+        <input
+          type="text"
+          value={tagInput}
+          onChange={(e) => setTagInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && tagInput.trim()) {
+              e.preventDefault();
+              if (!tags.includes(tagInput.trim())) {
+                setTags([...tags, tagInput.trim()]);
+              }
+              setTagInput('');
+            }
+          }}
+          className="input"
+          placeholder="Type a tag and press Enter"
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Notes (optional)</label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          className="input"
+          rows={3}
+          placeholder="Add any additional notes..."
         />
       </div>
 

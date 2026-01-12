@@ -13,6 +13,8 @@ export interface Transaction {
   date: string; // ISO format
   isRecurring: boolean;
   recurringId?: string; // Link to RecurringTransaction if applicable
+  tags?: string[]; // Array of tags
+  notes?: string; // Optional notes
 }
 
 export type RecurringFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
@@ -26,8 +28,18 @@ export interface RecurringTransaction {
   lastApplied?: string; // Last date transaction was generated (ISO format)
 }
 
+export interface Budget {
+  id: string;
+  bucketId: string;
+  amount: number;
+  period: 'monthly' | 'yearly';
+  year: number;
+  month?: number; // 1-12 for monthly, undefined for yearly
+}
+
 export interface AppState {
   buckets: Bucket[];
   transactions: Transaction[];
   recurringTransactions: RecurringTransaction[];
+  budgets: Budget[];
 }

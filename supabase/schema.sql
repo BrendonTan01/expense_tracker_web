@@ -29,11 +29,25 @@ CREATE TABLE IF NOT EXISTS transactions (
   date TEXT NOT NULL,
   isRecurring INTEGER NOT NULL DEFAULT 0,
   recurringId TEXT,
+  tags TEXT, -- JSON array of tags
+  notes TEXT, -- Optional notes
   FOREIGN KEY (bucketId) REFERENCES buckets(id) ON DELETE SET NULL,
   FOREIGN KEY (recurringId) REFERENCES recurring_transactions(id) ON DELETE SET NULL
+);
+
+-- Create budgets table
+CREATE TABLE IF NOT EXISTS budgets (
+  id TEXT PRIMARY KEY,
+  bucketId TEXT NOT NULL,
+  amount REAL NOT NULL,
+  period TEXT NOT NULL CHECK(period IN ('monthly', 'yearly')),
+  year INTEGER NOT NULL,
+  month INTEGER, -- NULL for yearly budgets
+  FOREIGN KEY (bucketId) REFERENCES buckets(id) ON DELETE CASCADE
 );
 
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_transactions_recurring ON transactions(recurringId);
 CREATE INDEX IF NOT EXISTS idx_recurring_start_date ON recurring_transactions(startDate);
+CREATE INDEX IF NOT EXISTS idx_budgets_bucket_period ON budgets(bucketId, period, year, month);

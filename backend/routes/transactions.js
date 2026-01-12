@@ -29,7 +29,12 @@ router.get('/', (req, res) => {
     query += ' ORDER BY date DESC, id DESC';
     
     const transactions = db.prepare(query).all(...params);
-    res.json(transactions);
+    // Parse tags from JSON string
+    const parsedTransactions = transactions.map(t => ({
+      ...t,
+      tags: t.tags ? JSON.parse(t.tags) : null,
+    }));
+    res.json(parsedTransactions);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -42,7 +47,12 @@ router.get('/:id', (req, res) => {
     if (!transaction) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
-    res.json(transaction);
+    // Parse tags from JSON string
+    const parsedTransaction = {
+      ...transaction,
+      tags: transaction.tags ? JSON.parse(transaction.tags) : null,
+    };
+    res.json(parsedTransaction);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -51,7 +61,7 @@ router.get('/:id', (req, res) => {
 // POST create a new transaction
 router.post('/', (req, res) => {
   try {
-    const { id, type, amount, description, bucketId, date, isRecurring, recurringId } = req.body;
+    const { id, type, amount, description, bucketId, date, isRecurring, recurringId, tags, notes } = req.body;
     
     if (!id || !type || amount === undefined || !description || !date) {
       return res.status(400).json({ error: 'id, type, amount, description, and date are required' });
@@ -62,8 +72,8 @@ router.post('/', (req, res) => {
     }
     
     const stmt = db.prepare(`
-      INSERT INTO transactions (id, type, amount, description, bucketId, date, isRecurring, recurringId)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO transactions (id, type, amount, description, bucketId, date, isRecurring, recurringId, tags, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     stmt.run(
@@ -74,11 +84,17 @@ router.post('/', (req, res) => {
       bucketId || null,
       date,
       isRecurring ? 1 : 0,
-      recurringId || null
+      recurringId || null,
+      tags && tags.length > 0 ? JSON.stringify(tags) : null,
+      notes || null
     );
     
     const transaction = db.prepare('SELECT * FROM transactions WHERE id = ?').get(id);
-    res.status(201).json(transaction);
+    const parsedTransaction = {
+      ...transaction,
+      tags: transaction.tags ? JSON.parse(transaction.tags) : null,
+    };
+    res.status(201).json(parsedTransaction);
   } catch (error) {
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
       return res.status(409).json({ error: 'Transaction with this ID already exists' });
@@ -90,7 +106,7 @@ router.post('/', (req, res) => {
 // PUT update a transaction
 router.put('/:id', (req, res) => {
   try {
-    const { type, amount, description, bucketId, date, isRecurring, recurringId } = req.body;
+    const { type, amount, description, bucketId, date, isRecurring, recurringId, tags, notes } = req.body;
     
     if (!type || amount === undefined || !description || !date) {
       return res.status(400).json({ error: 'type, amount, description, and date are required' });
@@ -102,7 +118,7 @@ router.put('/:id', (req, res) => {
     
     const stmt = db.prepare(`
       UPDATE transactions 
-      SET type = ?, amount = ?, description = ?, bucketId = ?, date = ?, isRecurring = ?, recurringId = ?
+      SET type = ?, amount = ?, description = ?, bucketId = ?, date = ?, isRecurring = ?, recurringId = ?, tags = ?, notes = ?
       WHERE id = ?
     `);
     
@@ -114,6 +130,8 @@ router.put('/:id', (req, res) => {
       date,
       isRecurring ? 1 : 0,
       recurringId || null,
+      tags && tags.length > 0 ? JSON.stringify(tags) : null,
+      notes || null,
       req.params.id
     );
     
@@ -122,7 +140,11 @@ router.put('/:id', (req, res) => {
     }
     
     const transaction = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.id);
-    res.json(transaction);
+    const parsedTransaction = {
+      ...transaction,
+      tags: transaction.tags ? JSON.parse(transaction.tags) : null,
+    };
+    res.json(parsedTransaction);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
-import { Transaction, Bucket } from '../types';
+import { Transaction, Bucket, Budget } from '../types';
 import { formatCurrency } from '../utils/dateHelpers';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 
 interface SummaryProps {
   transactions: Transaction[];
   buckets: Bucket[];
+  budgets: Budget[];
 }
 
 type Period = 'all' | 'month' | 'year' | 'thisYear' | 'custom';
@@ -100,7 +101,7 @@ const CustomTooltip = ({ active, payload, label, buckets }: CustomTooltipProps) 
   return null;
 };
 
-export default function Summary({ transactions, buckets }: SummaryProps) {
+export default function Summary({ transactions, buckets, budgets }: SummaryProps) {
   const [period, setPeriod] = useState<Period>('thisYear');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
@@ -194,6 +195,125 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
       })
       .sort((a, b) => b.amount - a.amount);
   }, [filteredTransactions, buckets]);
+
+  // Budget tracking
+  const budgetStatus = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+
+    return budgets
+      .filter((budget) => {
+        if (budget.period === 'monthly') {
+          return budget.year === currentYear && budget.month === currentMonth;
+        } else {
+          return budget.year === currentYear;
+        }
+      })
+      .map((budget) => {
+        const bucketExpenses = filteredTransactions
+          .filter((t) => t.type === 'expense' && t.bucketId === budget.bucketId)
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        const percentage = (bucketExpenses / budget.amount) * 100;
+        const remaining = budget.amount - bucketExpenses;
+
+        return {
+          budget,
+          bucket: buckets.find((b) => b.id === budget.bucketId),
+          spent: bucketExpenses,
+          budgeted: budget.amount,
+          remaining,
+          percentage,
+          isOverBudget: bucketExpenses > budget.amount,
+        };
+      });
+  }, [budgets, filteredTransactions, buckets, period, useCustomRange, customStartDate, customEndDate]);
+
+  // Spending trends - compare current period with previous period
+  const spendingTrends = useMemo(() => {
+    if (period === 'all' || period === 'custom') return null;
+
+    const now = new Date();
+    let currentStart: Date, currentEnd: Date, previousStart: Date, previousEnd: Date;
+
+    if (period === 'month') {
+      // Last month vs month before
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      currentStart = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1);
+      currentEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+      previousStart = new Date(lastMonth.getFullYear(), lastMonth.getMonth() - 1, 1);
+      previousEnd = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 0);
+    } else if (period === 'year') {
+      // Last year vs year before
+      const lastYear = now.getFullYear() - 1;
+      currentStart = new Date(lastYear, 0, 1);
+      currentEnd = new Date(lastYear, 11, 31);
+      previousStart = new Date(lastYear - 1, 0, 1);
+      previousEnd = new Date(lastYear - 1, 11, 31);
+    } else if (period === 'thisYear') {
+      // This year vs last year
+      currentStart = new Date(now.getFullYear(), 0, 1);
+      currentEnd = new Date(now.getFullYear(), 11, 31);
+      previousStart = new Date(now.getFullYear() - 1, 0, 1);
+      previousEnd = new Date(now.getFullYear() - 1, 11, 31);
+    } else {
+      return null;
+    }
+
+    const currentExpenses = transactions
+      .filter((t) => {
+        const date = new Date(t.date);
+        return t.type === 'expense' && date >= currentStart && date <= currentEnd;
+      })
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const previousExpenses = transactions
+      .filter((t) => {
+        const date = new Date(t.date);
+        return t.type === 'expense' && date >= previousStart && date <= previousEnd;
+      })
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const currentIncome = transactions
+      .filter((t) => {
+        const date = new Date(t.date);
+        return t.type === 'income' && date >= currentStart && date <= currentEnd;
+      })
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const previousIncome = transactions
+      .filter((t) => {
+        const date = new Date(t.date);
+        return t.type === 'income' && date >= previousStart && date <= previousEnd;
+      })
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const expenseChange = previousExpenses > 0 
+      ? ((currentExpenses - previousExpenses) / previousExpenses) * 100 
+      : 0;
+    const incomeChange = previousIncome > 0 
+      ? ((currentIncome - previousIncome) / previousIncome) * 100 
+      : 0;
+
+    return {
+      currentExpenses,
+      previousExpenses,
+      expenseChange,
+      currentIncome,
+      previousIncome,
+      incomeChange,
+    };
+  }, [transactions, period]);
+
+  // Pie chart data
+  const pieChartData = useMemo(() => {
+    return bucketBreakdown.map((item) => ({
+      name: item.bucketName,
+      value: item.amount,
+      color: item.bucketColor,
+    }));
+  }, [bucketBreakdown]);
 
   // Prepare chart data - group by year
   const chartData = useMemo(() => {
@@ -445,8 +565,134 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
         </div>
       )}
 
+      {spendingTrends && (
+        <div className="trends-section" style={{ marginTop: '32px', padding: '20px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+          <h3>Spending Trends</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginTop: '16px' }}>
+            <div style={{ padding: '16px', backgroundColor: 'white', borderRadius: '8px' }}>
+              <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '8px' }}>Expenses</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, marginBottom: '4px' }}>
+                {formatCurrency(spendingTrends.currentExpenses)}
+              </div>
+              <div style={{ fontSize: '14px', color: spendingTrends.expenseChange >= 0 ? '#ef4444' : '#10b981' }}>
+                {spendingTrends.expenseChange >= 0 ? '↑' : '↓'} {Math.abs(spendingTrends.expenseChange).toFixed(1)}% vs previous period
+              </div>
+              <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+                Previous: {formatCurrency(spendingTrends.previousExpenses)}
+              </div>
+            </div>
+            <div style={{ padding: '16px', backgroundColor: 'white', borderRadius: '8px' }}>
+              <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '8px' }}>Income</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, marginBottom: '4px' }}>
+                {formatCurrency(spendingTrends.currentIncome)}
+              </div>
+              <div style={{ fontSize: '14px', color: spendingTrends.incomeChange >= 0 ? '#10b981' : '#ef4444' }}>
+                {spendingTrends.incomeChange >= 0 ? '↑' : '↓'} {Math.abs(spendingTrends.incomeChange).toFixed(1)}% vs previous period
+              </div>
+              <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+                Previous: {formatCurrency(spendingTrends.previousIncome)}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {budgetStatus.length > 0 && (
+        <div className="budget-status" style={{ marginTop: '32px' }}>
+          <h3>Budget Status</h3>
+          <div style={{ display: 'grid', gap: '16px', marginTop: '16px' }}>
+            {budgetStatus.map((status) => (
+              <div
+                key={status.budget.id}
+                style={{
+                  padding: '16px',
+                  backgroundColor: status.isOverBudget ? '#ffebee' : '#f0fdf4',
+                  borderRadius: '8px',
+                  border: `2px solid ${status.isOverBudget ? '#ef4444' : '#10b981'}`,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span
+                      style={{
+                        width: '16px',
+                        height: '16px',
+                        backgroundColor: status.bucket?.color || '#ccc',
+                        borderRadius: '4px',
+                        display: 'inline-block',
+                      }}
+                    />
+                    <strong>{status.bucket?.name || 'Unknown'}</strong>
+                  </div>
+                  <span style={{ color: status.isOverBudget ? '#ef4444' : '#10b981', fontWeight: 600 }}>
+                    {status.isOverBudget ? 'Over Budget' : 'On Track'}
+                  </span>
+                </div>
+                <div style={{ marginTop: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '4px' }}>
+                    <span>Spent: {formatCurrency(status.spent)}</span>
+                    <span>Budget: {formatCurrency(status.budgeted)}</span>
+                  </div>
+                  <div style={{ 
+                    height: '8px', 
+                    backgroundColor: '#e2e8f0', 
+                    borderRadius: '4px', 
+                    overflow: 'hidden',
+                    marginTop: '8px'
+                  }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${Math.min(status.percentage, 100)}%`,
+                        backgroundColor: status.isOverBudget ? '#ef4444' : '#10b981',
+                        transition: 'width 0.3s',
+                      }}
+                    />
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                    {status.percentage.toFixed(1)}% used
+                    {!status.isOverBudget && status.remaining > 0 && (
+                      <span style={{ marginLeft: '8px' }}>
+                        • {formatCurrency(status.remaining)} remaining
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {pieChartData.length > 0 && (
+        <div className="pie-chart-section" style={{ marginTop: '32px' }}>
+          <h3>Expenses by Bucket (Pie Chart)</h3>
+          <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
+            <ResponsiveContainer width="100%" height={400}>
+              <PieChart>
+                <Pie
+                  data={pieChartData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={120}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {pieChartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       {bucketBreakdown.length > 0 && (
-        <div className="bucket-breakdown">
+        <div className="bucket-breakdown" style={{ marginTop: '32px' }}>
           <h3>Expenses by Bucket</h3>
           <div className="breakdown-list">
             {bucketBreakdown.map((item) => {

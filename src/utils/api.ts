@@ -1,4 +1,4 @@
-import { AppState, Bucket, Transaction, RecurringTransaction } from '../types';
+import { AppState, Bucket, Transaction, RecurringTransaction, Budget } from '../types';
 
 // Use relative URLs for API calls (works with Vercel serverless functions)
 const API_BASE_URL = '/api';
@@ -55,8 +55,14 @@ export const bucketsApi = {
 
 // Transactions API
 export const transactionsApi = {
-  getAll: async (): Promise<Transaction[]> => {
-    const response = await fetch(`${API_BASE_URL}/transactions`);
+  getAll: async (params?: { startDate?: string; endDate?: string; type?: string }): Promise<Transaction[]> => {
+    const queryParams = new URLSearchParams();
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.type) queryParams.append('type', params.type);
+    
+    const url = `${API_BASE_URL}/transactions${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+    const response = await fetch(url);
     const transactions = await handleResponse<any[]>(response);
     // Convert database format (isRecurring as 0/1) to app format (boolean)
     return transactions.map(t => ({
@@ -64,6 +70,8 @@ export const transactionsApi = {
       isRecurring: Boolean(t.isRecurring),
       bucketId: t.bucketId || undefined,
       recurringId: t.recurringId || undefined,
+      tags: t.tags ? (typeof t.tags === 'string' ? JSON.parse(t.tags) : t.tags) : undefined,
+      notes: t.notes || undefined,
     }));
   },
   
@@ -75,6 +83,8 @@ export const transactionsApi = {
       isRecurring: Boolean(t.isRecurring),
       bucketId: t.bucketId || undefined,
       recurringId: t.recurringId || undefined,
+      tags: t.tags ? (typeof t.tags === 'string' ? JSON.parse(t.tags) : t.tags) : undefined,
+      notes: t.notes || undefined,
     };
   },
   
@@ -105,6 +115,8 @@ export const transactionsApi = {
       isRecurring: Boolean(t.isRecurring),
       bucketId: t.bucketId || undefined,
       recurringId: t.recurringId || undefined,
+      tags: t.tags ? (typeof t.tags === 'string' ? JSON.parse(t.tags) : t.tags) : undefined,
+      notes: t.notes || undefined,
     };
   },
   
@@ -229,13 +241,59 @@ export const recurringApi = {
   },
 };
 
+// Budgets API
+export const budgetsApi = {
+  getAll: async (params?: { bucketId?: string; period?: string; year?: number; month?: number }): Promise<Budget[]> => {
+    const queryParams = new URLSearchParams();
+    if (params?.bucketId) queryParams.append('bucketId', params.bucketId);
+    if (params?.period) queryParams.append('period', params.period);
+    if (params?.year) queryParams.append('year', params.year.toString());
+    if (params?.month) queryParams.append('month', params.month.toString());
+    
+    const url = `${API_BASE_URL}/budgets${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+    const response = await fetch(url);
+    return handleResponse<Budget[]>(response);
+  },
+  
+  getById: async (id: string): Promise<Budget> => {
+    const response = await fetch(`${API_BASE_URL}/budgets/${id}`);
+    return handleResponse<Budget>(response);
+  },
+  
+  create: async (budget: Budget): Promise<Budget> => {
+    const response = await fetch(`${API_BASE_URL}/budgets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(budget),
+    });
+    return handleResponse<Budget>(response);
+  },
+  
+  update: async (id: string, updates: Partial<Budget>): Promise<Budget> => {
+    const response = await fetch(`${API_BASE_URL}/budgets/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    return handleResponse<Budget>(response);
+  },
+  
+  delete: async (id: string): Promise<void> => {
+    const response = await fetch(`${API_BASE_URL}/budgets/${id}`, {
+      method: 'DELETE',
+    });
+    return handleResponse<void>(response);
+  },
+};
+
 // App State API (for loading all data at once)
 export const appStateApi = {
   load: async (): Promise<AppState> => {
-    const [buckets, transactions, recurring] = await Promise.all([
+    const [buckets, transactions, recurring, budgets] = await Promise.all([
       bucketsApi.getAll(),
       transactionsApi.getAll(),
       recurringApi.getAll(),
+      budgetsApi.getAll(),
     ]);
     
     // Convert database format to app format
@@ -243,6 +301,7 @@ export const appStateApi = {
       buckets,
       transactions,
       recurringTransactions: recurring,
+      budgets,
     };
   },
 };

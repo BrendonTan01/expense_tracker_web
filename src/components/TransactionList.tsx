@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Transaction, Bucket } from '../types';
 import { formatDate, formatCurrency } from '../utils/dateHelpers';
 
@@ -18,60 +18,291 @@ export default function TransactionList({
   const [filterType, setFilterType] = useState<'all' | 'expense' | 'income'>('all');
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterBucket, setFilterBucket] = useState<string>('all');
+  const [filterTag, setFilterTag] = useState<string>('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   const getBucketName = (bucketId?: string) => {
     if (!bucketId) return null;
     return buckets.find((b) => b.id === bucketId)?.name;
   };
 
-  const filteredTransactions = transactions.filter((t) => {
-    if (filterType === 'all') return true;
-    return t.type === filterType;
-  });
+  // Get all unique tags from transactions
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    transactions.forEach(t => {
+      if (t.tags && t.tags.length > 0) {
+        t.tags.forEach(tag => tagSet.add(tag));
+      }
+    });
+    return Array.from(tagSet).sort();
+  }, [transactions]);
 
-  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
-    let comparison = 0;
-    if (sortBy === 'date') {
-      comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
-    } else {
-      comparison = a.amount - b.amount;
-    }
-    return sortOrder === 'asc' ? comparison : -comparison;
-  });
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((t) => {
+      // Type filter
+      if (filterType !== 'all' && t.type !== filterType) return false;
+
+      // Search query (description, notes)
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesDescription = t.description.toLowerCase().includes(query);
+        const matchesNotes = t.notes?.toLowerCase().includes(query) || false;
+        const matchesAmount = t.amount.toString().includes(query);
+        if (!matchesDescription && !matchesNotes && !matchesAmount) return false;
+      }
+
+      // Bucket filter
+      if (filterBucket !== 'all') {
+        if (filterBucket === 'none' && t.bucketId) return false;
+        if (filterBucket !== 'none' && t.bucketId !== filterBucket) return false;
+      }
+
+      // Tag filter
+      if (filterTag !== 'all') {
+        if (!t.tags || !t.tags.includes(filterTag)) return false;
+      }
+
+      // Date range filter
+      if (startDate) {
+        const transactionDate = new Date(t.date);
+        const start = new Date(startDate);
+        if (transactionDate < start) return false;
+      }
+      if (endDate) {
+        const transactionDate = new Date(t.date);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        if (transactionDate > end) return false;
+      }
+
+      // Amount range filter
+      if (minAmount) {
+        const min = parseFloat(minAmount);
+        if (!isNaN(min) && t.amount < min) return false;
+      }
+      if (maxAmount) {
+        const max = parseFloat(maxAmount);
+        if (!isNaN(max) && t.amount > max) return false;
+      }
+
+      return true;
+    });
+  }, [transactions, filterType, searchQuery, filterBucket, filterTag, startDate, endDate, minAmount, maxAmount]);
+
+  const sortedTransactions = useMemo(() => {
+    return [...filteredTransactions].sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === 'date') {
+        comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+      } else {
+        comparison = a.amount - b.amount;
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [filteredTransactions, sortBy, sortOrder]);
+
+  const handleExportCSV = () => {
+    const headers = ['Date', 'Type', 'Description', 'Bucket', 'Amount', 'Tags', 'Notes'];
+    const rows = sortedTransactions.map(t => [
+      formatDate(t.date),
+      t.type,
+      t.description,
+      getBucketName(t.bucketId) || '',
+      t.amount.toString(),
+      (t.tags || []).join('; '),
+      t.notes || '',
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `transactions_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setFilterBucket('all');
+    setFilterTag('all');
+    setStartDate('');
+    setEndDate('');
+    setMinAmount('');
+    setMaxAmount('');
+  };
 
   return (
     <div className="transaction-list">
       <div className="transaction-list-header">
         <h2>Transactions</h2>
-        <div className="filters">
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value as typeof filterType)}
-            className="input input-sm"
-          >
-            <option value="all">All</option>
-            <option value="expense">Expenses</option>
-            <option value="income">Income</option>
-          </select>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="input input-sm"
-          >
-            <option value="date">Sort by Date</option>
-            <option value="amount">Sort by Amount</option>
-          </select>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={handleExportCSV} className="btn btn-sm btn-secondary">
+            Export CSV
+          </button>
           <button
-            onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
             className="btn btn-sm btn-secondary"
           >
-            {sortOrder === 'asc' ? '↑' : '↓'}
+            {showAdvancedFilters ? 'Hide' : 'Show'} Filters
           </button>
         </div>
       </div>
 
+      <div className="filters" style={{ marginBottom: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <input
+          type="text"
+          placeholder="Search transactions..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="input input-sm"
+          style={{ flex: '1', minWidth: '200px' }}
+        />
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value as typeof filterType)}
+          className="input input-sm"
+        >
+          <option value="all">All Types</option>
+          <option value="expense">Expenses</option>
+          <option value="income">Income</option>
+        </select>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+          className="input input-sm"
+        >
+          <option value="date">Sort by Date</option>
+          <option value="amount">Sort by Amount</option>
+        </select>
+        <button
+          onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+          className="btn btn-sm btn-secondary"
+        >
+          {sortOrder === 'asc' ? '↑' : '↓'}
+        </button>
+      </div>
+
+      {showAdvancedFilters && (
+        <div className="advanced-filters" style={{ 
+          padding: '16px', 
+          backgroundColor: '#f8fafc', 
+          borderRadius: '8px', 
+          marginBottom: '16px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '12px'
+        }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: 500 }}>
+              Bucket
+            </label>
+            <select
+              value={filterBucket}
+              onChange={(e) => setFilterBucket(e.target.value)}
+              className="input input-sm"
+            >
+              <option value="all">All Buckets</option>
+              <option value="none">No Bucket</option>
+              {buckets.map((bucket) => (
+                <option key={bucket.id} value={bucket.id}>
+                  {bucket.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: 500 }}>
+              Tag
+            </label>
+            <select
+              value={filterTag}
+              onChange={(e) => setFilterTag(e.target.value)}
+              className="input input-sm"
+            >
+              <option value="all">All Tags</option>
+              {allTags.map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: 500 }}>
+              Start Date
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="input input-sm"
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: 500 }}>
+              End Date
+            </label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="input input-sm"
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: 500 }}>
+              Min Amount
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              value={minAmount}
+              onChange={(e) => setMinAmount(e.target.value)}
+              className="input input-sm"
+              placeholder="0.00"
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: 500 }}>
+              Max Amount
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              value={maxAmount}
+              onChange={(e) => setMaxAmount(e.target.value)}
+              className="input input-sm"
+              placeholder="0.00"
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <button onClick={clearFilters} className="btn btn-sm btn-secondary">
+              Clear Filters
+            </button>
+          </div>
+        </div>
+      )}
+
       {sortedTransactions.length === 0 ? (
-        <p className="empty-state">No transactions yet. Add one to get started!</p>
+        <p className="empty-state">
+          {transactions.length === 0 
+            ? 'No transactions yet. Add one to get started!'
+            : 'No transactions match your filters. Try adjusting your search criteria.'}
+        </p>
       ) : (
         <div className="transaction-table">
           <table>
@@ -81,6 +312,7 @@ export default function TransactionList({
                 <th>Type</th>
                 <th>Description</th>
                 <th>Bucket</th>
+                <th>Tags</th>
                 <th>Amount</th>
                 <th>Actions</th>
               </tr>
@@ -94,12 +326,42 @@ export default function TransactionList({
                       {transaction.type}
                     </span>
                   </td>
-                  <td>{transaction.description}</td>
+                  <td>
+                    <div>
+                      {transaction.description}
+                      {transaction.notes && (
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                          {transaction.notes}
+                        </div>
+                      )}
+                    </div>
+                  </td>
                   <td>
                     {transaction.bucketId ? (
                       <span className="bucket-badge">
                         {getBucketName(transaction.bucketId)}
                       </span>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
+                  <td>
+                    {transaction.tags && transaction.tags.length > 0 ? (
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                        {transaction.tags.map((tag, idx) => (
+                          <span
+                            key={idx}
+                            style={{
+                              backgroundColor: '#e2e8f0',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                            }}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
                     ) : (
                       <span className="text-muted">—</span>
                     )}

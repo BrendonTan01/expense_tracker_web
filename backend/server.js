@@ -6,6 +6,7 @@ import { initDatabase } from './database.js';
 import bucketRoutes from './routes/buckets.js';
 import transactionRoutes from './routes/transactions.js';
 import recurringRoutes from './routes/recurring.js';
+import budgetRoutes from './routes/budgets.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -30,6 +31,7 @@ initDatabase();
 app.use('/api/buckets', bucketRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/recurring', recurringRoutes);
+app.use('/api/budgets', budgetRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
