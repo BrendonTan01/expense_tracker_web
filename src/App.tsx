@@ -344,14 +344,6 @@ function App() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="app">
-        <div style={{ padding: '2rem', textAlign: 'center' }}>Loading...</div>
-      </div>
-    );
-  }
-
   // Close settings dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -366,6 +358,14 @@ function App() {
       return () => document.removeEventListener('click', handleClickOutside);
     }
   }, [settingsOpen]);
+
+  if (loading) {
+    return (
+      <div className="app">
+        <div style={{ padding: '2rem', textAlign: 'center' }}>Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
