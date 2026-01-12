@@ -345,7 +345,7 @@ function App() {
     }
   };
 
-  // Close settings dropdown when clicking outside
+  // Close settings dropdown when clicking outside and prevent body scroll on mobile
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
@@ -356,7 +356,14 @@ function App() {
 
     if (settingsOpen) {
       document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
+      // Prevent body scroll on mobile when dropdown is open
+      if (window.innerWidth <= 768) {
+        document.body.style.overflow = 'hidden';
+      }
+      return () => {
+        document.removeEventListener('click', handleClickOutside);
+        document.body.style.overflow = '';
+      };
     }
   }, [settingsOpen]);
 
@@ -429,35 +436,41 @@ function App() {
               <span style={{ marginLeft: '6px', fontSize: '12px' }}>▼</span>
             </button>
             {settingsOpen && (
-              <div className="settings-dropdown-menu">
-                <button
-                  className={`settings-dropdown-item ${activeTab === 'buckets' ? 'active' : ''}`}
-                  onClick={() => {
-                    setActiveTab('buckets');
-                    setSettingsOpen(false);
-                  }}
-                >
-                  Buckets
-                </button>
-                <button
-                  className={`settings-dropdown-item ${activeTab === 'recurring' ? 'active' : ''}`}
-                  onClick={() => {
-                    setActiveTab('recurring');
-                    setSettingsOpen(false);
-                  }}
-                >
-                  Recurring
-                </button>
-                <button
-                  className={`settings-dropdown-item ${activeTab === 'budgets' ? 'active' : ''}`}
-                  onClick={() => {
-                    setActiveTab('budgets');
-                    setSettingsOpen(false);
-                  }}
-                >
-                  Budgets
-                </button>
-              </div>
+              <>
+                <div 
+                  className="settings-dropdown-backdrop"
+                  onClick={() => setSettingsOpen(false)}
+                />
+                <div className="settings-dropdown-menu">
+                  <button
+                    className={`settings-dropdown-item ${activeTab === 'buckets' ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveTab('buckets');
+                      setSettingsOpen(false);
+                    }}
+                  >
+                    Buckets
+                  </button>
+                  <button
+                    className={`settings-dropdown-item ${activeTab === 'recurring' ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveTab('recurring');
+                      setSettingsOpen(false);
+                    }}
+                  >
+                    Recurring
+                  </button>
+                  <button
+                    className={`settings-dropdown-item ${activeTab === 'budgets' ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveTab('budgets');
+                      setSettingsOpen(false);
+                    }}
+                  >
+                    Budgets
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </nav>

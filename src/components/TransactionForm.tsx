@@ -27,6 +27,13 @@ export default function TransactionForm({
   const [tagInput, setTagInput] = useState('');
   const [notes, setNotes] = useState(initialTransaction?.notes || '');
 
+  const handleAddTag = () => {
+    if (tagInput.trim() && !tags.includes(tagInput.trim())) {
+      setTags([...tags, tagInput.trim()]);
+      setTagInput('');
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const numAmount = parseFloat(amount);
@@ -139,7 +146,7 @@ export default function TransactionForm({
       </div>
 
       <div className="form-group">
-        <label>Tags (press Enter to add)</label>
+        <label>Tags</label>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
           {tags.map((tag, index) => (
             <span
@@ -174,22 +181,31 @@ export default function TransactionForm({
             </span>
           ))}
         </div>
-        <input
-          type="text"
-          value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && tagInput.trim()) {
-              e.preventDefault();
-              if (!tags.includes(tagInput.trim())) {
-                setTags([...tags, tagInput.trim()]);
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <input
+            type="text"
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && tagInput.trim()) {
+                e.preventDefault();
+                handleAddTag();
               }
-              setTagInput('');
-            }
-          }}
-          className="input"
-          placeholder="Type a tag and press Enter"
-        />
+            }}
+            className="input"
+            placeholder="Type a tag"
+            style={{ flex: 1 }}
+          />
+          <button
+            type="button"
+            onClick={handleAddTag}
+            className="btn btn-secondary"
+            disabled={!tagInput.trim()}
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            Add Tag
+          </button>
+        </div>
       </div>
 
       <div className="form-group">

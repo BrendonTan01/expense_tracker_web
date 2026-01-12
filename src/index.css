@@ -118,6 +118,10 @@ body {
   overflow: hidden;
 }
 
+.settings-dropdown-backdrop {
+  display: none;
+}
+
 .settings-dropdown-item {
   display: block;
   width: 100%;
@@ -180,6 +184,15 @@ body {
 
 .btn-secondary:hover {
   background-color: #5a6268;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn:disabled:hover {
+  background-color: var(--secondary-color);
 }
 
 .btn-danger {
@@ -821,9 +834,100 @@ td {
     padding: 10px;
   }
 
+  .app-header {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .app-header h1 {
+    font-size: 24px;
+    margin-bottom: 16px;
+  }
+
+  .app-main {
+    padding: 16px;
+  }
+
   .tabs {
     overflow-x: auto;
     flex-wrap: nowrap;
+    gap: 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab {
+    padding: 8px 16px;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .settings-dropdown-backdrop {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .settings-dropdown-menu {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin-top: 0;
+    border-radius: 16px 16px 0 0;
+    max-height: 50vh;
+    overflow-y: auto;
+    min-width: auto;
+    box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -1px rgba(0, 0, 0, 0.06);
+    animation: slideUp 0.3s ease-out;
+    z-index: 1000;
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  .settings-dropdown-item {
+    padding: 16px 20px;
+    font-size: 16px;
+  }
+
+  .transaction-form {
+    padding: 16px;
+  }
+
+  .form-group {
+    margin-bottom: 20px;
+  }
+
+  .form-group label {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+
+  .input {
+    padding: 12px;
+    font-size: 16px; /* Prevents zoom on iOS */
   }
 
   .transaction-table {
@@ -831,11 +935,21 @@ td {
   }
 
   th, td {
-    padding: 8px;
+    padding: 10px 8px;
+    font-size: 14px;
   }
 
   .summary-cards {
     grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .summary-card {
+    padding: 16px;
+  }
+
+  .summary-amount {
+    font-size: 28px;
   }
 
   .bucket-item,
@@ -843,11 +957,70 @@ td {
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
+    padding: 16px;
   }
 
   .bucket-actions,
   .recurring-actions {
     width: 100%;
     justify-content: flex-end;
+  }
+
+  .btn {
+    padding: 12px 20px;
+    font-size: 16px;
+  }
+
+  .btn-sm {
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .form-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .date-range-selector {
+    padding: 12px;
+    margin-bottom: 20px;
+  }
+
+  .date-range-inputs {
+    flex-direction: column;
+    width: 100%;
+    gap: 12px;
+  }
+
+  .date-range-inputs > div {
+    width: 100%;
+  }
+
+  .date-range-inputs input[type="date"] {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  .bucket-manager-header,
+  .transaction-list-header,
+  .recurring-manager-header,
+  .summary-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .chart-container {
+    padding: 16px;
+  }
+
+  .chart-wrapper {
+    padding: 16px;
   }
 }
