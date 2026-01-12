@@ -9,7 +9,7 @@ interface SummaryProps {
   budgets: Budget[];
 }
 
-type Period = 'all' | 'month' | 'year' | 'thisYear' | 'custom';
+type Period = 'all' | 'month' | 'year' | 'thisYear' | 'thisMonth' | 'custom';
 
 interface ChartDataPoint {
   period: string;
@@ -133,6 +133,12 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
       // Last day of last month
       endDate = new Date(now.getFullYear(), now.getMonth(), 0);
       endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'thisMonth') {
+      // This month: first day to last day of current month
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      endDate.setHours(23, 59, 59, 999);
     } else if (period === 'year') {
       // Last year: January 1 to December 31 of previous year
       const lastYear = now.getFullYear() - 1;
@@ -244,6 +250,12 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
       currentEnd = new Date(now.getFullYear(), now.getMonth(), 0);
       previousStart = new Date(lastMonth.getFullYear(), lastMonth.getMonth() - 1, 1);
       previousEnd = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 0);
+    } else if (period === 'thisMonth') {
+      // This month vs last month
+      currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      currentEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      previousStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      previousEnd = new Date(now.getFullYear(), now.getMonth(), 0);
     } else if (period === 'year') {
       // Last year vs year before
       const lastYear = now.getFullYear() - 1;
@@ -439,6 +451,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
             style={{ minWidth: '150px' }}
           >
             <option value="all">All Time</option>
+            <option value="thisMonth">This Month</option>
             <option value="month">Last Month</option>
             <option value="year">Last Year</option>
             <option value="thisYear">This Year</option>
