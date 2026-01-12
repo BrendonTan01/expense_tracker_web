@@ -272,18 +272,20 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
     }
   };
 
-  const handleBarClick = (data: ChartDataPoint, index: number, e: React.MouseEvent) => {
+  const handleBarClick = (data: any) => {
     // Only allow month clicks when viewing "this year" and data is grouped by month
     if (period !== 'thisYear') return;
     
-    if (!data || !data.periodKey) return;
+    // Access the payload from the BarRectangleItem
+    const dataPoint = data?.payload as ChartDataPoint | undefined;
+    if (!dataPoint || !dataPoint.periodKey) return;
     
     // Check if the periodKey is in month format (YYYY-MM)
     const monthPattern = /^\d{4}-\d{2}$/;
-    if (!monthPattern.test(data.periodKey)) return;
+    if (!monthPattern.test(dataPoint.periodKey)) return;
     
     // Parse the month and year
-    const [year, month] = data.periodKey.split('-').map(Number);
+    const [year, month] = dataPoint.periodKey.split('-').map(Number);
     const monthIndex = month - 1; // JavaScript months are 0-indexed
     
     // Calculate first and last day of the month
@@ -416,7 +418,7 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
                   radius={[4, 4, 0, 0]}
                   onClick={handleBarClick}
                 >
-                  {chartData.map((entry, index) => (
+                  {chartData.map((_, index) => (
                     <Cell 
                       key={`cell-income-${index}`} 
                       style={{ cursor: period === 'thisYear' ? 'pointer' : 'default' }}
@@ -430,7 +432,7 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
                   radius={[4, 4, 0, 0]}
                   onClick={handleBarClick}
                 >
-                  {chartData.map((entry, index) => (
+                  {chartData.map((_, index) => (
                     <Cell 
                       key={`cell-expenses-${index}`} 
                       style={{ cursor: period === 'thisYear' ? 'pointer' : 'default' }}
