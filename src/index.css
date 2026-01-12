@@ -765,6 +765,56 @@ td {
   display: inline-block;
 }
 
+/* Reflections */
+.reflections {
+  padding: 0;
+}
+
+.reflections-header {
+  margin-bottom: 32px;
+}
+
+.reflections-header h2 {
+  margin: 0 0 8px 0;
+  color: var(--primary-color);
+  font-weight: 700;
+  font-size: 28px;
+}
+
+.years-list,
+.months-list {
+  margin-top: 24px;
+}
+
+.year-item,
+.month-item {
+  display: block;
+  width: 100%;
+  padding: 20px;
+  margin-bottom: 16px;
+  text-align: left;
+  background: var(--light-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-left: 4px solid var(--primary-color);
+}
+
+.year-item:hover,
+.month-item:hover {
+  background: var(--hover-bg);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.year-item h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .app {

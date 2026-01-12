@@ -11,8 +11,9 @@ import TransactionList from './components/TransactionList';
 const Summary = lazy(() => import('./components/Summary'));
 const RecurringTransactionManager = lazy(() => import('./components/RecurringTransactionManager'));
 const BudgetManager = lazy(() => import('./components/BudgetManager'));
+const Reflections = lazy(() => import('./components/Reflections'));
 
-type Tab = 'summary' | 'transactions' | 'buckets' | 'recurring' | 'budgets';
+type Tab = 'summary' | 'transactions' | 'reflections' | 'buckets' | 'recurring' | 'budgets';
 
 // Error Boundary Component
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -407,6 +408,15 @@ function App() {
           >
             Transactions
           </button>
+          <button
+            className={`tab ${activeTab === 'reflections' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('reflections');
+              setSettingsOpen(false);
+            }}
+          >
+            Reflections
+          </button>
           <div className="settings-dropdown">
             <button
               className={`tab settings-tab ${['buckets', 'recurring', 'budgets'].includes(activeTab) ? 'active' : ''}`}
@@ -478,6 +488,12 @@ function App() {
               onEdit={handleEditTransaction}
             />
           </div>
+        )}
+
+        {activeTab === 'reflections' && (
+          <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading reflections...</div>}>
+            <Reflections />
+          </Suspense>
         )}
 
         {activeTab === 'buckets' && (
