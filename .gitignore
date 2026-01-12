@@ -31,3 +31,7 @@ backend/*.db-wal
 # Environment variables
 .env
 .env.local
+
+# Nested git repositories
+expense_tracker_web/
+expense_tracker_web2/
