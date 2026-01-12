@@ -39,12 +39,20 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
     const filterDate = new Date();
 
     if (period === 'month') {
-      filterDate.setMonth(now.getMonth() - 1);
+      // Set to the first day of last month
+      filterDate.setFullYear(now.getFullYear(), now.getMonth() - 1, 1);
+      filterDate.setHours(0, 0, 0, 0);
     } else if (period === 'year') {
-      filterDate.setFullYear(now.getFullYear() - 1);
+      // Set to January 1st of last year
+      filterDate.setFullYear(now.getFullYear() - 1, 0, 1);
+      filterDate.setHours(0, 0, 0, 0);
     }
 
-    return transactions.filter((t) => new Date(t.date) >= filterDate);
+    return transactions.filter((t) => {
+      const transactionDate = new Date(t.date);
+      transactionDate.setHours(0, 0, 0, 0);
+      return transactionDate >= filterDate;
+    });
   }, [transactions, period, useCustomRange, customStartDate, customEndDate]);
 
   const totals = useMemo(() => {
@@ -270,11 +278,28 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
                     borderRadius: '8px',
                     padding: '12px',
                   }}
-                  formatter={(value: any, _name: any) => {
-                    if (typeof value === 'number') {
-                      return formatCurrency(value);
+                  formatter={(value: any, name: any) => {
+                    if (typeof value === 'number' && value > 0) {
+                      // In recharts, the name parameter can be either the name prop or dataKey
+                      // We need to handle both cases
+                      let displayName = name;
+                      
+                      // If name is a dataKey (starts with "expense_"), convert it to bucket name
+                      if (name && typeof name === 'string' && name.startsWith('expense_')) {
+                        const bucketId = name.replace('expense_', '');
+                        if (bucketId === 'no-bucket') {
+                          displayName = 'No Bucket';
+                        } else {
+                          const bucket = buckets.find(b => b.id === bucketId);
+                          displayName = bucket?.name || 'Unknown';
+                        }
+                      } else if (name === 'income' || name === 'Income') {
+                        displayName = 'Income';
+                      }
+                      
+                      return [formatCurrency(value), displayName];
                     }
-                    return value;
+                    return null;
                   }}
                   labelFormatter={(label) => `Period: ${label}`}
                 />
@@ -288,21 +313,26 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
                     return bucket?.name || 'Unknown';
                   }}
                 />
-                <Bar dataKey="income" fill="#10b981" name="income" radius={[4, 4, 0, 0]} />
+                <Bar 
+                  dataKey="income" 
+                  fill="#10b981" 
+                  name="Income" 
+                  radius={[4, 4, 0, 0]}
+                />
                 {buckets.map((bucket) => (
                   <Bar
                     key={bucket.id}
                     dataKey={`expense_${bucket.id}`}
                     stackId="expenses"
                     fill={bucket.color || '#94a3b8'}
-                    name={`expense_${bucket.id}`}
+                    name={bucket.name}
                   />
                 ))}
                 <Bar
                   dataKey="expense_no-bucket"
                   stackId="expenses"
                   fill="#94a3b8"
-                  name="expense_no-bucket"
+                  name="No Bucket"
                 />
               </BarChart>
             </ResponsiveContainer>
