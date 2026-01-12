@@ -1,17 +1,18 @@
 import { useState, useMemo } from 'react';
 import { Transaction, Bucket } from '../types';
 import { formatCurrency } from '../utils/dateHelpers';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 
 interface SummaryProps {
   transactions: Transaction[];
   buckets: Bucket[];
 }
 
-type Period = 'all' | 'month' | 'year' | 'custom';
+type Period = 'all' | 'month' | 'year' | 'thisYear' | 'custom';
 
 interface ChartDataPoint {
   period: string;
+  periodKey: string; // Original key like "2026-01" for month clicks
   income: number;
   expenses: number;
   bucketBreakdown?: Record<string, number>; // For tooltip breakdown
@@ -100,7 +101,7 @@ const CustomTooltip = ({ active, payload, label, buckets }: CustomTooltipProps) 
 };
 
 export default function Summary({ transactions, buckets }: SummaryProps) {
-  const [period, setPeriod] = useState<Period>('year');
+  const [period, setPeriod] = useState<Period>('thisYear');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
   const [useCustomRange, setUseCustomRange] = useState(false);
@@ -137,6 +138,13 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
       startDate = new Date(lastYear, 0, 1);
       startDate.setHours(0, 0, 0, 0);
       endDate = new Date(lastYear, 11, 31);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'thisYear') {
+      // This year: January 1 to December 31 of current year
+      const currentYear = now.getFullYear();
+      startDate = new Date(currentYear, 0, 1);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(currentYear, 11, 31);
       endDate.setHours(23, 59, 59, 999);
     } else {
       return transactions;
@@ -228,11 +236,12 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
     // Convert to chart data format
     const data: ChartDataPoint[] = Object.entries(grouped)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([period, data]) => {
+      .map(([periodKey, data]) => {
         return {
           period: groupByMonth 
-            ? new Date(period + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
-            : period,
+            ? new Date(periodKey + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
+            : periodKey,
+          periodKey: periodKey, // Store original key for month clicks
           income: data.income,
           expenses: data.expenses,
           bucketBreakdown: data.bucketBreakdown,
@@ -253,7 +262,7 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
     setCustomStartDate('');
     setCustomEndDate('');
     setUseCustomRange(false);
-    setPeriod('year');
+    setPeriod('thisYear');
   };
 
   const handlePeriodChange = (newPeriod: Period) => {
@@ -261,6 +270,39 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
     if (newPeriod !== 'custom') {
       setUseCustomRange(false);
     }
+  };
+
+  const handleBarClick = (data: ChartDataPoint, index: number, e: React.MouseEvent) => {
+    // Only allow month clicks when viewing "this year" and data is grouped by month
+    if (period !== 'thisYear') return;
+    
+    if (!data || !data.periodKey) return;
+    
+    // Check if the periodKey is in month format (YYYY-MM)
+    const monthPattern = /^\d{4}-\d{2}$/;
+    if (!monthPattern.test(data.periodKey)) return;
+    
+    // Parse the month and year
+    const [year, month] = data.periodKey.split('-').map(Number);
+    const monthIndex = month - 1; // JavaScript months are 0-indexed
+    
+    // Calculate first and last day of the month
+    const startDate = new Date(year, monthIndex, 1);
+    const endDate = new Date(year, monthIndex + 1, 0); // Last day of the month
+    
+    // Format dates as YYYY-MM-DD for the date inputs
+    const formatDate = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    
+    // Set the custom date range to the clicked month
+    setCustomStartDate(formatDate(startDate));
+    setCustomEndDate(formatDate(endDate));
+    setUseCustomRange(true);
+    setPeriod('custom');
   };
 
   return (
@@ -277,6 +319,7 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
             <option value="all">All Time</option>
             <option value="month">Last Month</option>
             <option value="year">Last Year</option>
+            <option value="thisYear">This Year</option>
             <option value="custom">Custom Range</option>
           </select>
         </div>
@@ -336,10 +379,20 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
 
       {chartData.length > 0 && (
         <div className="chart-container">
-          <div className="chart-title">Income and Expenses Over Time</div>
+          <div className="chart-title">
+            Income and Expenses Over Time
+            {period === 'thisYear' && (
+              <span style={{ fontSize: '14px', fontWeight: 'normal', color: '#64748b', marginLeft: '8px' }}>
+                (Click on a month to zoom in)
+              </span>
+            )}
+          </div>
           <div className="chart-wrapper">
             <ResponsiveContainer width="100%" height={400}>
-              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <BarChart 
+                data={chartData} 
+                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis 
                   dataKey="period" 
@@ -361,13 +414,29 @@ export default function Summary({ transactions, buckets }: SummaryProps) {
                   fill="#10b981" 
                   name="Income"
                   radius={[4, 4, 0, 0]}
-                />
+                  onClick={handleBarClick}
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell 
+                      key={`cell-income-${index}`} 
+                      style={{ cursor: period === 'thisYear' ? 'pointer' : 'default' }}
+                    />
+                  ))}
+                </Bar>
                 <Bar
                   dataKey="expenses"
                   fill="#ef4444"
                   name="Expenses"
                   radius={[4, 4, 0, 0]}
-                />
+                  onClick={handleBarClick}
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell 
+                      key={`cell-expenses-${index}`} 
+                      style={{ cursor: period === 'thisYear' ? 'pointer' : 'default' }}
+                    />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
