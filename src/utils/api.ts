@@ -428,7 +428,7 @@ export const summariesApi = {
   },
   
   getById: async (id: string): Promise<MonthlySummary | YearlySummary> => {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/summaries/${id}`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/summaries?id=${id}`, {
       headers: getAuthHeaders(),
     }).catch((err) => {
       throw new Error(`Failed to fetch summary: ${err.message}`);
@@ -457,10 +457,10 @@ export const summariesApi = {
   },
   
   update: async (id: string, summary: string, type: 'monthly' | 'yearly'): Promise<MonthlySummary | YearlySummary> => {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/summaries/${id}`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/summaries`, {
       method: 'PUT',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ summary, type }),
+      body: JSON.stringify({ id, summary, type }),
     }).catch((err) => {
       throw new Error(`Failed to update summary: ${err.message}`);
     });
@@ -468,7 +468,7 @@ export const summariesApi = {
   },
   
   delete: async (id: string): Promise<void> => {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/summaries/${id}`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/summaries?id=${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
     }).catch((err) => {
