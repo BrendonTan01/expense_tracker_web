@@ -13,12 +13,12 @@ CREATE TABLE IF NOT EXISTS recurring_transactions (
   type TEXT NOT NULL CHECK(type IN ('expense', 'income')),
   amount REAL NOT NULL,
   description TEXT NOT NULL,
-  bucketId TEXT,
+  "bucketId" TEXT,
   frequency TEXT NOT NULL CHECK(frequency IN ('daily', 'weekly', 'fortnightly', 'monthly', 'yearly')),
-  startDate TEXT NOT NULL,
-  endDate TEXT,
-  lastApplied TEXT,
-  FOREIGN KEY (bucketId) REFERENCES buckets(id) ON DELETE SET NULL
+  "startDate" TEXT NOT NULL,
+  "endDate" TEXT,
+  "lastApplied" TEXT,
+  FOREIGN KEY ("bucketId") REFERENCES buckets(id) ON DELETE SET NULL
 );
 
 -- Create transactions table
@@ -28,26 +28,26 @@ CREATE TABLE IF NOT EXISTS transactions (
   type TEXT NOT NULL CHECK(type IN ('expense', 'income')),
   amount REAL NOT NULL,
   description TEXT NOT NULL,
-  bucketId TEXT,
+  "bucketId" TEXT,
   date TEXT NOT NULL,
-  isRecurring INTEGER NOT NULL DEFAULT 0,
-  recurringId TEXT,
+  "isRecurring" INTEGER NOT NULL DEFAULT 0,
+  "recurringId" TEXT,
   tags TEXT, -- JSON array of tags
   notes TEXT, -- Optional notes
-  FOREIGN KEY (bucketId) REFERENCES buckets(id) ON DELETE SET NULL,
-  FOREIGN KEY (recurringId) REFERENCES recurring_transactions(id) ON DELETE SET NULL
+  FOREIGN KEY ("bucketId") REFERENCES buckets(id) ON DELETE SET NULL,
+  FOREIGN KEY ("recurringId") REFERENCES recurring_transactions(id) ON DELETE SET NULL
 );
 
 -- Create budgets table
 CREATE TABLE IF NOT EXISTS budgets (
   id TEXT PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  bucketId TEXT NOT NULL,
+  "bucketId" TEXT NOT NULL,
   amount REAL NOT NULL,
   period TEXT NOT NULL CHECK(period IN ('monthly', 'yearly')),
   year INTEGER NOT NULL,
   month INTEGER, -- NULL for yearly budgets
-  FOREIGN KEY (bucketId) REFERENCES buckets(id) ON DELETE CASCADE
+  FOREIGN KEY ("bucketId") REFERENCES buckets(id) ON DELETE CASCADE
 );
 
 -- Create monthly_summaries table
@@ -74,10 +74,10 @@ CREATE INDEX IF NOT EXISTS idx_buckets_user_id ON buckets(user_id);
 CREATE INDEX IF NOT EXISTS idx_recurring_transactions_user_id ON recurring_transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
-CREATE INDEX IF NOT EXISTS idx_transactions_recurring ON transactions(recurringId);
-CREATE INDEX IF NOT EXISTS idx_recurring_start_date ON recurring_transactions(startDate);
+CREATE INDEX IF NOT EXISTS idx_transactions_recurring ON transactions("recurringId");
+CREATE INDEX IF NOT EXISTS idx_recurring_start_date ON recurring_transactions("startDate");
 CREATE INDEX IF NOT EXISTS idx_budgets_user_id ON budgets(user_id);
-CREATE INDEX IF NOT EXISTS idx_budgets_bucket_period ON budgets(bucketId, period, year, month);
+CREATE INDEX IF NOT EXISTS idx_budgets_bucket_period ON budgets("bucketId", period, year, month);
 CREATE INDEX IF NOT EXISTS idx_monthly_summaries_user_id ON monthly_summaries(user_id);
 CREATE INDEX IF NOT EXISTS idx_monthly_summaries_year_month ON monthly_summaries(year, month);
 CREATE INDEX IF NOT EXISTS idx_yearly_summaries_user_id ON yearly_summaries(user_id);
