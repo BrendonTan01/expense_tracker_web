@@ -29,9 +29,24 @@ export function getNextOccurrence(
       case 'weekly':
         next.setDate(next.getDate() + 7);
         break;
-      case 'monthly':
-        next.setMonth(next.getMonth() + 1);
+      case 'monthly': {
+        // Get the desired day of month from the start date
+        // This ensures we always try to use the same day each month
+        const desiredDay = start.getDate();
+        
+        // Move to the next month
+        const currentMonth = next.getMonth();
+        next.setMonth(currentMonth + 1);
+        
+        // Get the last day of the target month
+        const lastDayOfMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+        
+        // Use the desired day, or the last day of the month if the desired day doesn't exist
+        // (e.g., if start date is Jan 31, Feb will use Feb 28/29, Mar will use Mar 31)
+        const dayToUse = Math.min(desiredDay, lastDayOfMonth);
+        next.setDate(dayToUse);
         break;
+      }
       case 'yearly':
         next.setFullYear(next.getFullYear() + 1);
         break;
