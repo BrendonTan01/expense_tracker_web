@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS recurring_transactions (
   amount REAL NOT NULL,
   description TEXT NOT NULL,
   bucketId TEXT,
-  frequency TEXT NOT NULL CHECK(frequency IN ('daily', 'weekly', 'monthly', 'yearly')),
+  frequency TEXT NOT NULL CHECK(frequency IN ('daily', 'weekly', 'fortnightly', 'monthly', 'yearly')),
   startDate TEXT NOT NULL,
   endDate TEXT,
   lastApplied TEXT,
