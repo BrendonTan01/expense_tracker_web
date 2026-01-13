@@ -177,8 +177,8 @@ export default function RecurringTransactionManager({
                   key={recurring.id} 
                   className="recurring-item"
                   style={{
-                    borderLeft: `4px solid ${status.isActive ? (status.isOverdue ? '#ef4444' : '#10b981') : '#94a3b8'}`,
-                    backgroundColor: status.isOverdue ? '#ffebee' : 'white',
+                    borderLeft: `4px solid ${status.isActive ? (status.isOverdue ? 'var(--danger-color)' : 'var(--success-color)') : 'var(--secondary-color)'}`,
+                    backgroundColor: status.isOverdue ? 'var(--card-bg)' : 'var(--card-bg)',
                   }}
                 >
                   <div className="recurring-info">
@@ -189,7 +189,7 @@ export default function RecurringTransactionManager({
                         </span>
                         {status.isOverdue && (
                           <span style={{ 
-                            backgroundColor: '#ef4444', 
+                            backgroundColor: 'var(--danger-color)', 
                             color: 'white', 
                             padding: '2px 8px', 
                             borderRadius: '4px', 
@@ -201,7 +201,7 @@ export default function RecurringTransactionManager({
                         )}
                         {!status.isActive && (
                           <span style={{ 
-                            backgroundColor: '#94a3b8', 
+                            backgroundColor: 'var(--secondary-color)', 
                             color: 'white', 
                             padding: '2px 8px', 
                             borderRadius: '4px', 
@@ -213,7 +213,7 @@ export default function RecurringTransactionManager({
                         )}
                         {status.isActive && !status.isOverdue && (
                           <span style={{ 
-                            backgroundColor: '#10b981', 
+                            backgroundColor: 'var(--success-color)', 
                             color: 'white', 
                             padding: '2px 8px', 
                             borderRadius: '4px', 
@@ -235,11 +235,11 @@ export default function RecurringTransactionManager({
                       <span>Started: {formatDate(recurring.startDate)}</span>
                       {recurring.endDate && <span>Ends: {formatDate(recurring.endDate)}</span>}
                       <span>Next: {formatDate(status.nextDate)}</span>
-                      <span style={{ color: status.generatedCount > 0 ? '#10b981' : '#94a3b8' }}>
+                      <span style={{ color: status.generatedCount > 0 ? 'var(--success-color)' : 'var(--secondary-color)' }}>
                         Generated: {status.generatedCount} transaction{status.generatedCount !== 1 ? 's' : ''}
                       </span>
                       {status.lastGenerated && (
-                        <span style={{ fontSize: '12px', color: '#64748b' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                           Last: {formatDate(status.lastGenerated)}
                         </span>
                       )}

@@ -119,16 +119,16 @@ export default function TransactionForm({
   return (
     <form onSubmit={handleSubmit} className="transaction-form">
       {duplicateWarning && duplicateWarning.similar.length > 0 && (
-        <div style={{
+        <div className="duplicate-warning" style={{
           padding: '12px',
-          backgroundColor: '#fff3cd',
-          border: '1px solid #ffc107',
+          border: '1px solid var(--warning-color)',
           borderRadius: '4px',
           marginBottom: '16px',
           fontSize: '14px',
+          color: 'var(--text-color)',
         }}>
           <strong>⚠️ {duplicateWarning.message}</strong>
-          <div style={{ marginTop: '8px', fontSize: '12px', color: '#856404' }}>
+          <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
             Similar transactions:
             <ul style={{ marginTop: '4px', paddingLeft: '20px' }}>
               {duplicateWarning.similar.slice(0, 3).map(t => (

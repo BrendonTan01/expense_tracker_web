@@ -529,7 +529,7 @@ td {
 
 /* Recurring Transactions */
 .recurring-form-container {
-  background: var(--light-bg);
+  background: var(--card-bg);
   padding: 20px;
   border-radius: 12px;
   margin-bottom: 20px;
@@ -1141,4 +1141,13 @@ td {
 .dark-mode .badge-income {
   background-color: #14532d;
   color: #86efac;
+}
+
+.duplicate-warning {
+  background-color: rgba(251, 191, 36, 0.1);
+  border-color: var(--warning-color);
+}
+
+.dark-mode .duplicate-warning {
+  background-color: rgba(251, 191, 36, 0.15);
 }
