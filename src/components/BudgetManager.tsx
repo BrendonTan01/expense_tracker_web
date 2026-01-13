@@ -203,11 +203,17 @@ export default function BudgetManager({
     const numAmount = parseFloat(bulkAmount);
     if (isNaN(numAmount) || numAmount <= 0) return;
 
-    // Update all selected months
+    // Update all selected months - include all required fields
     bulkEditGroup.budgets
       .filter(b => b.month && selectedMonths.has(b.month))
       .forEach(budget => {
-        onUpdate(budget.id, { amount: numAmount });
+        onUpdate(budget.id, {
+          bucketId: budget.bucketId,
+          amount: numAmount,
+          period: budget.period,
+          year: budget.year,
+          month: budget.month,
+        });
       });
 
     cancelBulkEdit();
@@ -412,7 +418,7 @@ export default function BudgetManager({
             </div>
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', 
               gap: '8px' 
             }}>
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
@@ -425,9 +431,9 @@ export default function BudgetManager({
                     key={m} 
                     style={{ 
                       display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '8px', 
-                      padding: '8px',
+                      flexDirection: 'column',
+                      gap: '4px', 
+                      padding: '10px',
                       border: hasBudget ? '1px solid #cbd5e1' : '1px dashed #cbd5e1',
                       borderRadius: '4px',
                       backgroundColor: isSelected ? '#e0f2fe' : 'white',
@@ -435,16 +441,25 @@ export default function BudgetManager({
                       opacity: hasBudget ? 1 : 0.5
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => hasBudget && toggleMonthSelection(m)}
-                      disabled={!hasBudget}
-                    />
-                    <span>{getMonthName(m)}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => hasBudget && toggleMonthSelection(m)}
+                        disabled={!hasBudget}
+                      />
+                      <span style={{ fontWeight: '600', fontSize: '14px' }}>
+                        {getMonthName(m)}
+                      </span>
+                    </div>
                     {hasBudget && (
-                      <span style={{ fontSize: '12px', color: '#64748b', marginLeft: 'auto' }}>
+                      <span style={{ fontSize: '13px', color: '#64748b', marginLeft: '24px' }}>
                         ${budget.amount.toFixed(2)}
+                      </span>
+                    )}
+                    {!hasBudget && (
+                      <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '24px', fontStyle: 'italic' }}>
+                        No budget
                       </span>
                     )}
                   </label>
