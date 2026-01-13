@@ -1,10 +1,10 @@
-import { supabase } from '../lib/supabase.js';
+import { getAuthenticatedClient } from '../lib/supabase.js';
 
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -13,8 +13,15 @@ export default async function handler(req, res) {
   console.log(`[buckets] ${req.method} request to ${req.url}`);
 
   try {
+    // Get authenticated Supabase client
+    const { supabase, user, error: authError } = await getAuthenticatedClient(req.headers);
+    
+    if (authError) {
+      return res.status(401).json({ error: authError });
+    }
+
     if (req.method === 'GET') {
-      // GET all buckets
+      // GET all buckets (RLS will automatically filter by user_id)
       const { data, error } = await supabase
         .from('buckets')
         .select('*')
@@ -32,9 +39,15 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'id and name are required' });
       }
 
+      // Include user_id in the insert - RLS policy will verify it matches auth.uid()
       const { data, error } = await supabase
         .from('buckets')
-        .insert([{ id: bucketId, name, color: color || null }])
+        .insert([{ 
+          id: bucketId, 
+          name, 
+          color: color || null,
+          user_id: user.id 
+        }])
         .select()
         .single();
 
