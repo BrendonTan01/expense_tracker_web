@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Transaction, Bucket, FilterPreset, RecurringTransaction } from '../types';
+import { Transaction, Bucket, FilterPreset } from '../types';
 import { formatDate, formatCurrency } from '../utils/dateHelpers';
 import { saveToLocalStorage, loadFromLocalStorage, generateId } from '../utils/storage';
 

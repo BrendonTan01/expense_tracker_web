@@ -61,7 +61,7 @@ export default function TransactionForm({
         tags: tags.length > 0 ? tags : undefined,
         notes: notes || undefined,
       },
-      transactions.filter(t => t.id !== initialTransaction?.id), // Exclude current transaction if editing
+      transactions, // All transactions (we only check duplicates for new transactions, not when editing)
       24 // 24 hour window
     );
 

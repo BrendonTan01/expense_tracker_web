@@ -118,6 +118,7 @@ export default function RecurringTransactionManager({
         <div className="recurring-form-container">
           <TransactionForm
             buckets={buckets}
+            transactions={transactions}
             onSubmit={handleSubmit}
             onCancel={handleCancel}
             initialTransaction={formData}

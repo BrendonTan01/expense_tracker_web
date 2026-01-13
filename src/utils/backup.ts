@@ -1,4 +1,4 @@
-import { AppState, Transaction, Bucket, RecurringTransaction, Budget } from '../types';
+import { AppState } from '../types';
 
 export interface BackupData {
   version: string;

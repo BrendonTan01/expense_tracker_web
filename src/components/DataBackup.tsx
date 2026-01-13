@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AppState } from '../types';
-import { exportToJSON, importFromJSON, downloadBackup, BackupData } from '../utils/backup';
+import { importFromJSON, downloadBackup, BackupData } from '../utils/backup';
 
 interface DataBackupProps {
   appState: AppState;
