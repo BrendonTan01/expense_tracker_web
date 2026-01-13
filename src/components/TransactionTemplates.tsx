@@ -208,19 +208,21 @@ export default function TransactionTemplates({ buckets, onUseTemplate }: Transac
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
               {formData.tags?.map((tag, idx) => (
                 <span key={idx} className="tag" style={{
-                  backgroundColor: '#e2e8f0',
+                  backgroundColor: 'var(--light-bg)',
+                  color: 'var(--text-color)',
                   padding: '4px 8px',
                   borderRadius: '4px',
                   fontSize: '14px',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '4px',
+                  border: '1px solid var(--border-color)',
                 }}>
                   {tag}
                   <button
                     type="button"
                     onClick={() => setFormData({ ...formData, tags: formData.tags?.filter((_, i) => i !== idx) })}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'var(--text-muted)' }}
                   >
                     ×
                   </button>

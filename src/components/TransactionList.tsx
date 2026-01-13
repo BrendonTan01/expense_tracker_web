@@ -571,10 +571,12 @@ export default function TransactionList({
                           <span
                             key={idx}
                             style={{
-                              backgroundColor: '#e2e8f0',
+                              backgroundColor: 'var(--light-bg)',
+                              color: 'var(--text-color)',
                               padding: '2px 6px',
                               borderRadius: '4px',
                               fontSize: '12px',
+                              border: '1px solid var(--border-color)',
                             }}
                           >
                             {tag}

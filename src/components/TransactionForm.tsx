@@ -229,13 +229,15 @@ export default function TransactionForm({
               key={index}
               className="tag"
               style={{
-                backgroundColor: '#e2e8f0',
+                backgroundColor: 'var(--light-bg)',
+                color: 'var(--text-color)',
                 padding: '4px 8px',
                 borderRadius: '4px',
                 fontSize: '14px',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
+                border: '1px solid var(--border-color)',
               }}
             >
               {tag}
@@ -247,7 +249,7 @@ export default function TransactionForm({
                   border: 'none',
                   cursor: 'pointer',
                   fontSize: '16px',
-                  color: '#64748b',
+                  color: 'var(--text-muted)',
                   padding: 0,
                   marginLeft: '4px',
                 }}

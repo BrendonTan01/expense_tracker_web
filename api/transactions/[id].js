@@ -1,10 +1,10 @@
-import { supabase } from '../../lib/supabase.js';
+import { getAuthenticatedClient } from '../../lib/supabase.js';
 
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -15,7 +15,15 @@ export default async function handler(req, res) {
   console.log(`[transactions/[id]] ${req.method} request for id: ${id}`);
 
   try {
+    // Get authenticated Supabase client
+    const { supabase, user, error: authError } = await getAuthenticatedClient(req.headers);
+    
+    if (authError) {
+      return res.status(401).json({ error: authError });
+    }
+
     if (req.method === 'GET') {
+      // GET transaction (RLS will automatically filter by user_id)
       const { data, error } = await supabase
         .from('transactions')
         .select('*')

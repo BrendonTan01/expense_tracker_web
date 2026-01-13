@@ -39,29 +39,31 @@ const CustomTooltip = ({ active, payload, label, buckets }: CustomTooltipProps) 
     const data = payload[0].payload as ChartDataPoint;
     const incomeValue = payload.find((p: TooltipPayload) => p.dataKey === 'income')?.value as number || 0;
     const expenseValue = payload.find((p: TooltipPayload) => p.dataKey === 'expenses')?.value as number || 0;
+    const isDarkMode = document.documentElement.classList.contains('dark-mode');
     
     return (
       <div style={{
-        backgroundColor: 'white',
-        border: '1px solid #e2e8f0',
+        backgroundColor: isDarkMode ? 'var(--card-bg)' : 'white',
+        border: `1px solid var(--border-color)`,
         borderRadius: '8px',
         padding: '12px',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+        boxShadow: 'var(--shadow-lg)',
+        color: 'var(--text-color)',
       }}>
-        <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>{`Period: ${label}`}</p>
+        <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: 'var(--text-color)' }}>{`Period: ${label}`}</p>
         {incomeValue > 0 && (
-          <p style={{ margin: '4px 0', color: '#10b981' }}>
+          <p style={{ margin: '4px 0', color: 'var(--success-color)' }}>
             Income: {formatCurrency(incomeValue)}
           </p>
         )}
         {expenseValue > 0 && (
           <>
-            <p style={{ margin: '4px 0 8px 0', color: '#ef4444' }}>
+            <p style={{ margin: '4px 0 8px 0', color: 'var(--danger-color)' }}>
               Expenses: {formatCurrency(expenseValue)}
             </p>
             {data.bucketBreakdown && Object.keys(data.bucketBreakdown).length > 0 && (
-              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e2e8f0' }}>
-                <p style={{ margin: '0 0 4px 0', fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
+              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: `1px solid var(--border-color)` }}>
+                <p style={{ margin: '0 0 4px 0', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
                   By Bucket:
                 </p>
                 {Object.entries(data.bucketBreakdown)
@@ -528,7 +530,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
           <div className="chart-title">
             Income and Expenses Over Time
             {period === 'thisYear' && (
-              <span style={{ fontSize: '14px', fontWeight: 'normal', color: '#64748b', marginLeft: '8px' }}>
+              <span style={{ fontSize: '14px', fontWeight: 'normal', color: 'var(--text-muted)', marginLeft: '8px' }}>
                 (Click on a month to zoom in)
               </span>
             )}
@@ -539,15 +541,17 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
                 data={chartData} 
                 margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
                 <XAxis 
                   dataKey="period" 
-                  stroke="#64748b"
+                  stroke="var(--text-muted)"
                   style={{ fontSize: '12px' }}
+                  tick={{ fill: 'var(--text-color)' }}
                 />
                 <YAxis 
-                  stroke="#64748b"
+                  stroke="var(--text-muted)"
                   style={{ fontSize: '12px' }}
+                  tick={{ fill: 'var(--text-color)' }}
                   tickFormatter={(value) => {
                     if (value >= 1000) return `$${(value / 1000).toFixed(1)}k`;
                     return `$${value}`;
@@ -590,30 +594,30 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
       )}
 
       {spendingTrends && (
-        <div className="trends-section" style={{ marginTop: '32px', padding: '20px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
-          <h3>Spending Trends</h3>
+        <div className="trends-section" style={{ marginTop: '32px', padding: '20px', backgroundColor: 'var(--light-bg)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+          <h3 style={{ color: 'var(--text-color)' }}>Spending Trends</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginTop: '16px' }}>
-            <div style={{ padding: '16px', backgroundColor: 'white', borderRadius: '8px' }}>
-              <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '8px' }}>Expenses</div>
-              <div style={{ fontSize: '24px', fontWeight: 600, marginBottom: '4px' }}>
+            <div style={{ padding: '16px', backgroundColor: 'var(--card-bg)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '8px' }}>Expenses</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-color)' }}>
                 {formatCurrency(spendingTrends.currentExpenses)}
               </div>
-              <div style={{ fontSize: '14px', color: spendingTrends.expenseChange >= 0 ? '#ef4444' : '#10b981' }}>
+              <div style={{ fontSize: '14px', color: spendingTrends.expenseChange >= 0 ? 'var(--danger-color)' : 'var(--success-color)' }}>
                 {spendingTrends.expenseChange >= 0 ? '↑' : '↓'} {Math.abs(spendingTrends.expenseChange).toFixed(1)}% vs previous period
               </div>
-              <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
                 Previous: {formatCurrency(spendingTrends.previousExpenses)}
               </div>
             </div>
-            <div style={{ padding: '16px', backgroundColor: 'white', borderRadius: '8px' }}>
-              <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '8px' }}>Income</div>
-              <div style={{ fontSize: '24px', fontWeight: 600, marginBottom: '4px' }}>
+            <div style={{ padding: '16px', backgroundColor: 'var(--card-bg)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '8px' }}>Income</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-color)' }}>
                 {formatCurrency(spendingTrends.currentIncome)}
               </div>
-              <div style={{ fontSize: '14px', color: spendingTrends.incomeChange >= 0 ? '#10b981' : '#ef4444' }}>
+              <div style={{ fontSize: '14px', color: spendingTrends.incomeChange >= 0 ? 'var(--success-color)' : 'var(--danger-color)' }}>
                 {spendingTrends.incomeChange >= 0 ? '↑' : '↓'} {Math.abs(spendingTrends.incomeChange).toFixed(1)}% vs previous period
               </div>
-              <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
                 Previous: {formatCurrency(spendingTrends.previousIncome)}
               </div>
             </div>
@@ -630,7 +634,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
               padding: '16px',
               borderRadius: '8px',
               border: '2px solid var(--warning-color)',
-              backgroundColor: '#fff7ed',
+              backgroundColor: 'var(--light-bg)',
             }}>
               <h3 style={{ margin: '0 0 12px 0', color: 'var(--warning-color)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 ⚠️ Budget Alerts
@@ -643,9 +647,9 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
                       key={status.budget.id}
                       style={{
                         padding: '12px',
-                        backgroundColor: status.isOverBudget ? '#fee' : '#fff7ed',
+                        backgroundColor: status.isOverBudget ? 'var(--card-bg)' : 'var(--light-bg)',
                         borderRadius: '6px',
-                        border: `1px solid ${status.isOverBudget ? '#ef4444' : '#f59e0b'}`,
+                        border: `1px solid ${status.isOverBudget ? 'var(--danger-color)' : 'var(--warning-color)'}`,
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -654,15 +658,15 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
                             style={{
                               width: '12px',
                               height: '12px',
-                              backgroundColor: status.bucket?.color || '#ccc',
+                              backgroundColor: status.bucket?.color || 'var(--text-muted)',
                               borderRadius: '3px',
                               display: 'inline-block',
                             }}
                           />
-                          <strong>{status.bucket?.name || 'Unknown'}</strong>
+                          <strong style={{ color: 'var(--text-color)' }}>{status.bucket?.name || 'Unknown'}</strong>
                         </div>
                         <span style={{
-                          color: status.isOverBudget ? '#ef4444' : '#f59e0b',
+                          color: status.isOverBudget ? 'var(--danger-color)' : 'var(--warning-color)',
                           fontWeight: 600,
                           fontSize: '14px',
                         }}>
@@ -701,9 +705,9 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
                 key={status.budget.id}
                 style={{
                   padding: '16px',
-                  backgroundColor: status.isOverBudget ? '#ffebee' : '#f0fdf4',
+                  backgroundColor: status.isOverBudget ? 'var(--card-bg)' : 'var(--light-bg)',
                   borderRadius: '8px',
-                  border: `2px solid ${status.isOverBudget ? '#ef4444' : '#10b981'}`,
+                  border: `2px solid ${status.isOverBudget ? 'var(--danger-color)' : 'var(--success-color)'}`,
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -712,12 +716,12 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
                       style={{
                         width: '16px',
                         height: '16px',
-                        backgroundColor: status.bucket?.color || '#ccc',
+                        backgroundColor: status.bucket?.color || 'var(--text-muted)',
                         borderRadius: '4px',
                         display: 'inline-block',
                       }}
                     />
-                    <strong>{status.bucket?.name || 'Unknown'}</strong>
+                    <strong style={{ color: 'var(--text-color)' }}>{status.bucket?.name || 'Unknown'}</strong>
                     <span
                       style={{
                         backgroundColor: status.budget.period === 'monthly' ? '#3b82f6' : '#8b5cf6',
@@ -732,18 +736,18 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
                       {status.budget.period === 'monthly' ? 'Monthly' : 'Yearly'}
                     </span>
                   </div>
-                  <span style={{ color: status.isOverBudget ? '#ef4444' : '#10b981', fontWeight: 600 }}>
+                  <span style={{ color: status.isOverBudget ? 'var(--danger-color)' : 'var(--success-color)', fontWeight: 600 }}>
                     {status.isOverBudget ? 'Over Budget' : 'On Track'}
                   </span>
                 </div>
                 <div style={{ marginTop: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '4px', color: 'var(--text-color)' }}>
                     <span>Spent: {formatCurrency(status.spent)}</span>
                     <span>Budget: {formatCurrency(status.budgeted)}</span>
                   </div>
                   <div style={{ 
                     height: '8px', 
-                    backgroundColor: '#e2e8f0', 
+                    backgroundColor: 'var(--border-color)', 
                     borderRadius: '4px', 
                     overflow: 'hidden',
                     marginTop: '8px'
@@ -752,12 +756,12 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
                       style={{
                         height: '100%',
                         width: `${Math.min(status.percentage, 100)}%`,
-                        backgroundColor: status.isOverBudget ? '#ef4444' : '#10b981',
+                        backgroundColor: status.isOverBudget ? 'var(--danger-color)' : 'var(--success-color)',
                         transition: 'width 0.3s',
                       }}
                     />
                   </div>
-                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
                     {status.percentage.toFixed(1)}% used
                     {!status.isOverBudget && status.remaining > 0 && (
                       <span style={{ marginLeft: '8px' }}>
