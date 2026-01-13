@@ -38,6 +38,33 @@ export default function TransactionForm({
     }
   };
 
+  // Update form fields when initialTransaction changes (for editing)
+  useEffect(() => {
+    if (initialTransaction) {
+      setType(initialTransaction.type || 'expense');
+      setAmount(initialTransaction.amount?.toString() || '');
+      setDescription(initialTransaction.description || '');
+      setBucketId(initialTransaction.bucketId || '');
+      setDate(
+        initialTransaction.date 
+          ? initialTransaction.date.split('T')[0] 
+          : new Date().toISOString().split('T')[0]
+      );
+      setTags(initialTransaction.tags || []);
+      setNotes(initialTransaction.notes || '');
+    } else {
+      // Reset form when not editing
+      setType('expense');
+      setAmount('');
+      setDescription('');
+      setBucketId('');
+      setDate(new Date().toISOString().split('T')[0]);
+      setTags([]);
+      setTagInput('');
+      setNotes('');
+    }
+  }, [initialTransaction]);
+
   // Check for duplicates when form data changes (only for new transactions)
   useEffect(() => {
     if (initialTransaction || !amount || !description) {
