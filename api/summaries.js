@@ -1,20 +1,27 @@
-import { supabase } from '../lib/supabase.js';
+import { getAuthenticatedClient } from '../lib/supabase.js';
 
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
   try {
+    // Get authenticated Supabase client
+    const { supabase, user, error: authError } = await getAuthenticatedClient(req.headers);
+    
+    if (authError) {
+      return res.status(401).json({ error: authError });
+    }
+
     if (req.method === 'GET') {
       const { id, type, year, month } = req.query;
       
-      // If id is provided, get a single summary by id
+      // If id is provided, get a single summary by id (RLS will automatically filter by user_id)
       if (id) {
         // Try to find in monthly_summaries first
         const monthlyResult = await supabase
@@ -133,11 +140,12 @@ export default async function handler(req, res) {
           if (error) throw error;
           return res.status(200).json(data);
         } else {
-          // Insert new
+          // Insert new - include user_id (RLS policy will verify it matches auth.uid())
           const { data, error } = await supabase
             .from('monthly_summaries')
             .insert([{
               id,
+              user_id: user.id,
               year: parseInt(year),
               month: parseInt(month),
               summary: summary || null,
@@ -174,11 +182,12 @@ export default async function handler(req, res) {
           if (error) throw error;
           return res.status(200).json(data);
         } else {
-          // Insert new
+          // Insert new - include user_id (RLS policy will verify it matches auth.uid())
           const { data, error } = await supabase
             .from('yearly_summaries')
             .insert([{
               id,
+              user_id: user.id,
               year: parseInt(year),
               summary: summary || null,
             }])

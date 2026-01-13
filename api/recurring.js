@@ -1,10 +1,10 @@
-import { supabase } from '../lib/supabase.js';
+import { getAuthenticatedClient } from '../lib/supabase.js';
 
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -13,8 +13,15 @@ export default async function handler(req, res) {
   console.log(`[recurring] ${req.method} request to ${req.url}`);
 
   try {
+    // Get authenticated Supabase client
+    const { supabase, user, error: authError } = await getAuthenticatedClient(req.headers);
+    
+    if (authError) {
+      return res.status(401).json({ error: authError });
+    }
+
     if (req.method === 'GET') {
-      // GET all recurring transactions
+      // GET all recurring transactions (RLS will automatically filter by user_id)
       const { data, error } = await supabase
         .from('recurring_transactions')
         .select('*')
@@ -56,10 +63,12 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'transaction.type must be either "expense" or "income"' });
       }
 
+      // Include user_id in the insert - RLS policy will verify it matches auth.uid()
       const { data, error } = await supabase
         .from('recurring_transactions')
         .insert([{
           id: recurringId,
+          user_id: user.id,
           type: transaction.type,
           amount: transaction.amount,
           description: transaction.description,

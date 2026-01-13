@@ -116,11 +116,11 @@ export default function SummaryNotes({ type, year, month }: SummaryNotesProps) {
     <div style={{ 
       marginTop: '32px', 
       padding: '20px', 
-      backgroundColor: '#f8fafc', 
+      backgroundColor: 'var(--light-bg)', 
       borderRadius: '8px',
-      border: '1px solid #e2e8f0'
+      border: '1px solid var(--border-color)'
     }}>
-      <h3 style={{ margin: '0 0 16px 0' }}>{getTitle()}</h3>
+      <h3 style={{ margin: '0 0 16px 0', color: 'var(--text-color)' }}>{getTitle()}</h3>
       
       {error && (
         <div style={{ 
@@ -142,12 +142,14 @@ export default function SummaryNotes({ type, year, month }: SummaryNotesProps) {
           width: '100%',
           minHeight: '150px',
           padding: '12px',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--border-color)',
           borderRadius: '4px',
           fontSize: '14px',
           fontFamily: 'inherit',
           resize: 'vertical',
           boxSizing: 'border-box',
+          backgroundColor: 'var(--card-bg)',
+          color: 'var(--text-color)',
         }}
       />
 
@@ -155,15 +157,9 @@ export default function SummaryNotes({ type, year, month }: SummaryNotesProps) {
         <button
           onClick={handleSave}
           disabled={saving}
+          className="btn btn-primary"
           style={{
-            padding: '10px 20px',
-            backgroundColor: '#3b82f6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
             cursor: saving ? 'not-allowed' : 'pointer',
-            fontSize: '14px',
-            fontWeight: 500,
             opacity: saving ? 0.6 : 1,
           }}
         >

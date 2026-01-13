@@ -1,18 +1,25 @@
-import { supabase } from '../lib/supabase.js';
+import { getAuthenticatedClient } from '../lib/supabase.js';
 
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
   try {
+    // Get authenticated Supabase client
+    const { supabase, user, error: authError } = await getAuthenticatedClient(req.headers);
+    
+    if (authError) {
+      return res.status(401).json({ error: authError });
+    }
+
     if (req.method === 'GET') {
-      // GET all budgets
+      // GET all budgets (RLS will automatically filter by user_id)
       const { bucketId, period, year, month } = req.query;
       let query = supabase
         .from('budgets')
@@ -56,10 +63,12 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'month is required for monthly budgets' });
       }
 
+      // Include user_id in the insert - RLS policy will verify it matches auth.uid()
       const { data, error } = await supabase
         .from('budgets')
         .insert([{
           id: budgetId,
+          user_id: user.id,
           bucketId,
           amount,
           period,

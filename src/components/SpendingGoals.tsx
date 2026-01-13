@@ -281,7 +281,18 @@ export default function SpendingGoals({ transactions, buckets }: SpendingGoalsPr
                     <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
                       {goal.type === 'savings' ? 'Savings Goal' : 'Spending Limit'}
                       {goal.bucketId && ` • ${buckets.find(b => b.id === goal.bucketId)?.name || 'Unknown'}`}
-                      {goal.deadline && ` • Due: ${new Date(goal.deadline).toLocaleDateString()}`}
+                      {goal.deadline && (
+                        <>
+                          {' • Due: '}
+                          <span style={{
+                            color: new Date(goal.deadline) < new Date() ? 'var(--danger-color)' : 'var(--text-muted)',
+                            fontWeight: new Date(goal.deadline) < new Date() ? 600 : 'normal'
+                          }}>
+                            {new Date(goal.deadline).toLocaleDateString()}
+                            {new Date(goal.deadline) < new Date() && ' (Exceeded)'}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
