@@ -4,9 +4,9 @@ import { Budget, Bucket } from '../types';
 interface BudgetManagerProps {
   budgets: Budget[];
   buckets: Bucket[];
-  onAdd: (budget: Budget) => void;
-  onUpdate: (id: string, budget: Partial<Budget>) => void;
-  onDelete: (id: string) => void;
+  onAdd: (budget: Budget) => void | Promise<void>;
+  onUpdate: (id: string, budget: Partial<Budget>) => void | Promise<void>;
+  onDelete: (id: string) => void | Promise<void>;
 }
 
 interface MonthlyBudgetGroup {
@@ -198,23 +198,36 @@ export default function BudgetManager({
     setSelectedMonths(new Set());
   };
 
-  const handleBulkUpdate = () => {
+  const handleBulkUpdate = async () => {
     if (!bulkEditGroup || selectedMonths.size === 0) return;
     const numAmount = parseFloat(bulkAmount);
     if (isNaN(numAmount) || numAmount <= 0) return;
 
     // Update all selected months - include all required fields
-    bulkEditGroup.budgets
-      .filter(b => b.month && selectedMonths.has(b.month))
-      .forEach(budget => {
-        onUpdate(budget.id, {
+    // Use Promise.allSettled to handle errors gracefully
+    const budgetsToUpdate = bulkEditGroup.budgets
+      .filter(b => b.month && selectedMonths.has(b.month));
+    
+    const results = await Promise.allSettled(
+      budgetsToUpdate.map(budget => {
+        const result = onUpdate(budget.id, {
           bucketId: budget.bucketId,
           amount: numAmount,
           period: budget.period,
           year: budget.year,
           month: budget.month,
         });
-      });
+        // Ensure we always return a Promise
+        return result instanceof Promise ? result : Promise.resolve(result);
+      })
+    );
+
+    // Check if any updates failed
+    const failures = results.filter(r => r.status === 'rejected');
+    if (failures.length > 0) {
+      console.error('Some budget updates failed:', failures);
+      // Still cancel the bulk edit, but errors are logged
+    }
 
     cancelBulkEdit();
   };
@@ -331,7 +344,7 @@ export default function BudgetManager({
                   <span>Apply to all months</span>
                 </label>
                 {editingId && (
-                  <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
                     (Cannot change when editing)
                   </p>
                 )}
@@ -373,11 +386,11 @@ export default function BudgetManager({
 
       {bulkEditGroup && (
         <div className="bulk-edit-form" style={{ 
-          border: '1px solid #e2e8f0', 
+          border: '1px solid var(--border-color)', 
           borderRadius: '8px', 
           padding: '20px', 
           marginBottom: '20px',
-          backgroundColor: '#f8fafc'
+          backgroundColor: 'var(--card-bg)'
         }}>
           <h3 style={{ marginTop: 0, marginBottom: '16px' }}>
             Bulk Edit: {buckets.find(b => b.id === bulkEditGroup.bucketId)?.name || 'Unknown'} - {bulkEditGroup.year}
@@ -434,9 +447,9 @@ export default function BudgetManager({
                       flexDirection: 'column',
                       gap: '4px', 
                       padding: '10px',
-                      border: hasBudget ? '1px solid #cbd5e1' : '1px dashed #cbd5e1',
+                      border: hasBudget ? '1px solid var(--border-color)' : '1px dashed var(--border-color)',
                       borderRadius: '4px',
-                      backgroundColor: isSelected ? '#e0f2fe' : 'white',
+                      backgroundColor: isSelected ? 'var(--hover-bg)' : 'var(--card-bg)',
                       cursor: hasBudget ? 'pointer' : 'not-allowed',
                       opacity: hasBudget ? 1 : 0.5
                     }}
@@ -453,12 +466,12 @@ export default function BudgetManager({
                       </span>
                     </div>
                     {hasBudget && (
-                      <span style={{ fontSize: '13px', color: '#64748b', marginLeft: '24px' }}>
+                      <span style={{ fontSize: '13px', color: 'var(--text-muted)', marginLeft: '24px' }}>
                         ${budget.amount.toFixed(2)}
                       </span>
                     )}
                     {!hasBudget && (
-                      <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '24px', fontStyle: 'italic' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '24px', fontStyle: 'italic' }}>
                         No budget
                       </span>
                     )}
@@ -508,10 +521,10 @@ export default function BudgetManager({
                       key={`${group.bucketId}-${group.year}`}
                       style={{ 
                         marginBottom: '24px',
-                        border: '1px solid #e2e8f0',
+                        border: '1px solid var(--border-color)',
                         borderRadius: '8px',
                         padding: '16px',
-                        backgroundColor: 'white'
+                        backgroundColor: 'var(--card-bg)'
                       }}
                     >
                       <div style={{ 
@@ -549,16 +562,16 @@ export default function BudgetManager({
                               justifyContent: 'space-between',
                               alignItems: 'center',
                               padding: '8px 12px',
-                              border: '1px solid #e2e8f0',
+                              border: '1px solid var(--border-color)',
                               borderRadius: '4px',
-                              backgroundColor: '#f8fafc'
+                              backgroundColor: 'var(--light-bg)'
                             }}
                           >
                             <div>
                               <div style={{ fontWeight: '500', fontSize: '14px' }}>
                                 {getMonthName(budget.month!)}
                               </div>
-                              <div style={{ fontSize: '12px', color: '#64748b' }}>
+                              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                                 ${budget.amount.toFixed(2)}
                               </div>
                             </div>
