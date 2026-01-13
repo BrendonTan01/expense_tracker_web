@@ -8,6 +8,7 @@ import BucketManager from './components/BucketManager';
 import TransactionForm from './components/TransactionForm';
 import TransactionList from './components/TransactionList';
 import Login from './components/Login';
+import Settings from './components/Settings';
 
 // Lazy load heavy components to reduce initial bundle size
 const Summary = lazy(() => import('./components/Summary'));
@@ -15,7 +16,7 @@ const RecurringTransactionManager = lazy(() => import('./components/RecurringTra
 const BudgetManager = lazy(() => import('./components/BudgetManager'));
 const Reflections = lazy(() => import('./components/Reflections'));
 
-type Tab = 'summary' | 'transactions' | 'reflections' | 'buckets' | 'recurring' | 'budgets';
+type Tab = 'summary' | 'transactions' | 'reflections' | 'settings' | 'buckets' | 'recurring' | 'budgets';
 
 // Error Boundary Component
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -58,7 +59,6 @@ function App() {
     budgets: [],
   });
   const [activeTab, setActiveTab] = useState<Tab>('summary');
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -353,34 +353,16 @@ function App() {
     }
   };
 
-  // Close settings dropdown when clicking outside and prevent body scroll on mobile
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
-      const target = event.target as HTMLElement;
-      if (!target.closest('.settings-dropdown') && !target.closest('.settings-dropdown-backdrop')) {
-        setSettingsOpen(false);
-      }
-    };
+  const handleSettingsNavigate = (tab: 'buckets' | 'recurring' | 'budgets') => {
+    setActiveTab(tab);
+  };
 
-    if (settingsOpen) {
-      // Use both mouse and touch events for better iOS support
-      document.addEventListener('click', handleClickOutside);
-      document.addEventListener('touchend', handleClickOutside);
-      // Prevent body scroll on mobile when dropdown is open
-      if (window.innerWidth <= 768) {
-        document.body.style.overflow = 'hidden';
-        document.body.style.position = 'fixed';
-        document.body.style.width = '100%';
-      }
-      return () => {
-        document.removeEventListener('click', handleClickOutside);
-        document.removeEventListener('touchend', handleClickOutside);
-        document.body.style.overflow = '';
-        document.body.style.position = '';
-        document.body.style.width = '';
-      };
+  const getActiveSubTab = (): 'buckets' | 'recurring' | 'budgets' => {
+    if (['buckets', 'recurring', 'budgets'].includes(activeTab)) {
+      return activeTab as 'buckets' | 'recurring' | 'budgets';
     }
-  }, [settingsOpen]);
+    return 'buckets'; // default
+  };
 
   // Show loading while checking authentication
   if (authLoading) {
@@ -439,117 +421,28 @@ function App() {
         <nav className="tabs">
           <button
             className={`tab ${activeTab === 'summary' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('summary');
-              setSettingsOpen(false);
-            }}
+            onClick={() => setActiveTab('summary')}
           >
             Summary
           </button>
           <button
             className={`tab ${activeTab === 'transactions' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('transactions');
-              setSettingsOpen(false);
-            }}
+            onClick={() => setActiveTab('transactions')}
           >
             Transactions
           </button>
           <button
             className={`tab ${activeTab === 'reflections' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('reflections');
-              setSettingsOpen(false);
-            }}
+            onClick={() => setActiveTab('reflections')}
           >
             Reflections
           </button>
-          <div className="settings-dropdown">
-            <button
-              className={`tab settings-tab ${['buckets', 'recurring', 'budgets'].includes(activeTab) ? 'active' : ''}`}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setSettingsOpen(!settingsOpen);
-              }}
-              onTouchStart={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setSettingsOpen(!settingsOpen);
-              }}
-            >
-              Settings
-              <span style={{ marginLeft: '6px', fontSize: '12px' }}>▼</span>
-            </button>
-            {settingsOpen && (
-              <>
-                <div 
-                  className="settings-dropdown-backdrop"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setSettingsOpen(false);
-                  }}
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    setSettingsOpen(false);
-                  }}
-                />
-                <div className="settings-dropdown-menu">
-                  <button
-                    className={`settings-dropdown-item ${activeTab === 'buckets' ? 'active' : ''}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setActiveTab('buckets');
-                      setSettingsOpen(false);
-                    }}
-                    onTouchStart={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setActiveTab('buckets');
-                      setSettingsOpen(false);
-                    }}
-                  >
-                    Buckets
-                  </button>
-                  <button
-                    className={`settings-dropdown-item ${activeTab === 'recurring' ? 'active' : ''}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setActiveTab('recurring');
-                      setSettingsOpen(false);
-                    }}
-                    onTouchStart={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setActiveTab('recurring');
-                      setSettingsOpen(false);
-                    }}
-                  >
-                    Recurring
-                  </button>
-                  <button
-                    className={`settings-dropdown-item ${activeTab === 'budgets' ? 'active' : ''}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setActiveTab('budgets');
-                      setSettingsOpen(false);
-                    }}
-                    onTouchStart={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setActiveTab('budgets');
-                      setSettingsOpen(false);
-                    }}
-                  >
-                    Budgets
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          <button
+            className={`tab ${activeTab === 'settings' || ['buckets', 'recurring', 'budgets'].includes(activeTab) ? 'active' : ''}`}
+            onClick={() => setActiveTab('settings')}
+          >
+            Settings
+          </button>
         </nav>
       </header>
 
@@ -584,6 +477,13 @@ function App() {
           <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading reflections...</div>}>
             <Reflections />
           </Suspense>
+        )}
+
+        {activeTab === 'settings' && (
+          <Settings
+            activeSubTab={getActiveSubTab()}
+            onNavigate={handleSettingsNavigate}
+          />
         )}
 
         {activeTab === 'buckets' && (
