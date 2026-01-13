@@ -71,8 +71,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Login failed');
+      let errorMessage = 'Login failed';
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const error = await response.json();
+          errorMessage = error.error || errorMessage;
+        } else {
+          const text = await response.text();
+          errorMessage = `Login failed: ${response.status} ${response.statusText}`;
+        }
+      } catch (e) {
+        errorMessage = `Login failed: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
@@ -91,8 +103,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Registration failed');
+      let errorMessage = 'Registration failed';
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const error = await response.json();
+          errorMessage = error.error || errorMessage;
+        } else {
+          const text = await response.text();
+          errorMessage = `Registration failed: ${response.status} ${response.statusText}`;
+        }
+      } catch (e) {
+        errorMessage = `Registration failed: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
