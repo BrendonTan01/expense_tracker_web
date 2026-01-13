@@ -355,22 +355,29 @@ function App() {
 
   // Close settings dropdown when clicking outside and prevent body scroll on mobile
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       const target = event.target as HTMLElement;
-      if (!target.closest('.settings-dropdown')) {
+      if (!target.closest('.settings-dropdown') && !target.closest('.settings-dropdown-backdrop')) {
         setSettingsOpen(false);
       }
     };
 
     if (settingsOpen) {
+      // Use both mouse and touch events for better iOS support
       document.addEventListener('click', handleClickOutside);
+      document.addEventListener('touchend', handleClickOutside);
       // Prevent body scroll on mobile when dropdown is open
       if (window.innerWidth <= 768) {
         document.body.style.overflow = 'hidden';
+        document.body.style.position = 'fixed';
+        document.body.style.width = '100%';
       }
       return () => {
         document.removeEventListener('click', handleClickOutside);
+        document.removeEventListener('touchend', handleClickOutside);
         document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
       };
     }
   }, [settingsOpen]);
@@ -417,21 +424,13 @@ function App() {
         </div>
       )}
       <header className="app-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <div className="app-header-top">
           <h1>Expense Tracker</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <span style={{ fontSize: '0.9rem', color: '#666' }}>{user.email}</span>
+          <div className="app-header-user-info">
+            <span className="user-email">{user.email}</span>
             <button
               onClick={logout}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: '#dc3545',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.9rem',
-              }}
+              className="btn-logout"
             >
               Logout
             </button>
@@ -469,6 +468,12 @@ function App() {
             <button
               className={`tab settings-tab ${['buckets', 'recurring', 'budgets'].includes(activeTab) ? 'active' : ''}`}
               onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setSettingsOpen(!settingsOpen);
+              }}
+              onTouchStart={(e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 setSettingsOpen(!settingsOpen);
               }}
@@ -480,12 +485,27 @@ function App() {
               <>
                 <div 
                   className="settings-dropdown-backdrop"
-                  onClick={() => setSettingsOpen(false)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setSettingsOpen(false);
+                  }}
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    setSettingsOpen(false);
+                  }}
                 />
                 <div className="settings-dropdown-menu">
                   <button
                     className={`settings-dropdown-item ${activeTab === 'buckets' ? 'active' : ''}`}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setActiveTab('buckets');
+                      setSettingsOpen(false);
+                    }}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       setActiveTab('buckets');
                       setSettingsOpen(false);
                     }}
@@ -494,7 +514,15 @@ function App() {
                   </button>
                   <button
                     className={`settings-dropdown-item ${activeTab === 'recurring' ? 'active' : ''}`}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setActiveTab('recurring');
+                      setSettingsOpen(false);
+                    }}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       setActiveTab('recurring');
                       setSettingsOpen(false);
                     }}
@@ -503,7 +531,15 @@ function App() {
                   </button>
                   <button
                     className={`settings-dropdown-item ${activeTab === 'budgets' ? 'active' : ''}`}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setActiveTab('budgets');
+                      setSettingsOpen(false);
+                    }}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       setActiveTab('budgets');
                       setSettingsOpen(false);
                     }}
