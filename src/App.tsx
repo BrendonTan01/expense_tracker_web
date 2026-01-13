@@ -219,6 +219,13 @@ function App() {
   };
 
   const handleAddTransaction = async (transactionData: Omit<Transaction, 'id' | 'isRecurring' | 'recurringId'>) => {
+    // Prevent adding transactions if no buckets exist
+    if (state.buckets.length === 0) {
+      setError('Please create at least one bucket before adding transactions.');
+      setActiveTab('buckets');
+      return;
+    }
+
     try {
       if (editingTransaction) {
         const updatedTransaction = await transactionsApi.update(editingTransaction.id, {
@@ -264,6 +271,12 @@ function App() {
   };
 
   const handleEditTransaction = (transaction: Transaction) => {
+    // Prevent editing transactions if no buckets exist
+    if (state.buckets.length === 0) {
+      setError('Please create at least one bucket before editing transactions.');
+      setActiveTab('buckets');
+      return;
+    }
     setEditingTransaction(transaction);
     setActiveTab('transactions');
   };
@@ -427,7 +440,15 @@ function App() {
           </button>
           <button
             className={`tab ${activeTab === 'transactions' ? 'active' : ''}`}
-            onClick={() => setActiveTab('transactions')}
+            onClick={() => {
+              // Redirect to buckets if no buckets exist
+              if (state.buckets.length === 0) {
+                setActiveTab('buckets');
+                setError('Please create at least one bucket before adding transactions.');
+              } else {
+                setActiveTab('transactions');
+              }
+            }}
           >
             Transactions
           </button>
@@ -455,21 +476,44 @@ function App() {
 
         {activeTab === 'transactions' && (
           <div className="transactions-view">
-            <div className="transactions-form-section">
-              <h2>{editingTransaction ? 'Edit' : 'Add'} Transaction</h2>
-              <TransactionForm
-                buckets={state.buckets}
-                onSubmit={handleAddTransaction}
-                onCancel={editingTransaction ? handleCancelEdit : undefined}
-                initialTransaction={editingTransaction || undefined}
-              />
-            </div>
-            <TransactionList
-              transactions={state.transactions}
-              buckets={state.buckets}
-              onDelete={handleDeleteTransaction}
-              onEdit={handleEditTransaction}
-            />
+            {state.buckets.length === 0 ? (
+              <div style={{ 
+                padding: '2rem', 
+                textAlign: 'center',
+                backgroundColor: '#fff3cd',
+                border: '1px solid #ffc107',
+                borderRadius: '4px',
+                margin: '1rem'
+              }}>
+                <h2>No Buckets Found</h2>
+                <p>You need to create at least one bucket before you can add transactions.</p>
+                <button
+                  onClick={() => setActiveTab('buckets')}
+                  className="btn btn-primary"
+                  style={{ marginTop: '1rem' }}
+                >
+                  Create Buckets
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="transactions-form-section">
+                  <h2>{editingTransaction ? 'Edit' : 'Add'} Transaction</h2>
+                  <TransactionForm
+                    buckets={state.buckets}
+                    onSubmit={handleAddTransaction}
+                    onCancel={editingTransaction ? handleCancelEdit : undefined}
+                    initialTransaction={editingTransaction || undefined}
+                  />
+                </div>
+                <TransactionList
+                  transactions={state.transactions}
+                  buckets={state.buckets}
+                  onDelete={handleDeleteTransaction}
+                  onEdit={handleEditTransaction}
+                />
+              </>
+            )}
           </div>
         )}
 
