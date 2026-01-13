@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const error = await response.json();
           errorMessage = error.error || errorMessage;
         } else {
-          const text = await response.text();
+          await response.text(); // Read response to consume body
           errorMessage = `Login failed: ${response.status} ${response.statusText}`;
         }
       } catch (e) {
@@ -110,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const error = await response.json();
           errorMessage = error.error || errorMessage;
         } else {
-          const text = await response.text();
+          await response.text(); // Read response to consume body
           errorMessage = `Registration failed: ${response.status} ${response.statusText}`;
         }
       } catch (e) {
