@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Transaction, Bucket, Budget } from '../types';
 import { formatCurrency } from '../utils/dateHelpers';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
@@ -110,6 +110,16 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
   const [customEndDate, setCustomEndDate] = useState<string>('');
   const [useCustomRange, setUseCustomRange] = useState(false);
   const [budgetFilter, setBudgetFilter] = useState<'all' | 'monthly' | 'yearly'>('all');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const filteredTransactions = useMemo(() => {
     if (useCustomRange && customStartDate && customEndDate) {
@@ -176,10 +186,14 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
       .filter((t) => t.type === 'expense')
       .reduce((sum, t) => sum + t.amount, 0);
 
+    const balance = income - expenses;
+    const savingPercentage = income > 0 ? (balance / income) * 100 : 0;
+
     return {
       income,
       expenses,
-      balance: income - expenses,
+      balance,
+      savingPercentage,
     };
   }, [filteredTransactions]);
 
@@ -330,6 +344,134 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
       incomeChange,
     };
   }, [transactions, period]);
+
+  // Savings Score calculation
+  const savingsScore = useMemo(() => {
+    let score = 0;
+    const factors: Array<{ name: string; score: number; maxScore: number; concern?: string }> = [];
+
+    // Factor 1: Saving Percentage (0-40 points)
+    // 20%+ saving rate = 40 points, 10% = 30 points, 0% = 20 points, negative = 0 points
+    let savingPercentageScore = 0;
+    if (totals.savingPercentage >= 20) {
+      savingPercentageScore = 40;
+    } else if (totals.savingPercentage >= 10) {
+      savingPercentageScore = 30 + ((totals.savingPercentage - 10) / 10) * 10;
+    } else if (totals.savingPercentage >= 0) {
+      savingPercentageScore = 20 + (totals.savingPercentage / 10) * 10;
+    } else {
+      savingPercentageScore = Math.max(0, 20 + totals.savingPercentage * 2);
+    }
+    score += savingPercentageScore;
+    factors.push({
+      name: 'Saving Rate',
+      score: savingPercentageScore,
+      maxScore: 40,
+      concern: totals.savingPercentage < 0 ? 'Spending exceeds income' : totals.savingPercentage < 10 ? 'Low saving rate' : undefined,
+    });
+
+    // Factor 2: Expense Trend (0-30 points)
+    // If expenses decreased or increased < 5% = 30 points
+    // If increased 5-15% = 20 points
+    // If increased 15-30% = 10 points
+    // If increased > 30% = 0 points
+    let expenseTrendScore = 30; // Default to full points if no comparison available
+    if (spendingTrends) {
+      const expenseChange = spendingTrends.expenseChange;
+      if (expenseChange <= -5) {
+        expenseTrendScore = 30;
+      } else if (expenseChange <= 5) {
+        expenseTrendScore = 30;
+      } else if (expenseChange <= 15) {
+        expenseTrendScore = 30 - ((expenseChange - 5) / 10) * 10;
+      } else if (expenseChange <= 30) {
+        expenseTrendScore = 20 - ((expenseChange - 15) / 15) * 10;
+      } else {
+        expenseTrendScore = Math.max(0, 10 - (expenseChange - 30) / 10);
+      }
+      score += expenseTrendScore;
+      factors.push({
+        name: 'Expense Trend',
+        score: expenseTrendScore,
+        maxScore: 30,
+        concern: expenseChange > 15 ? `Expenses increased ${expenseChange.toFixed(1)}%` : undefined,
+      });
+    } else {
+      factors.push({
+        name: 'Expense Trend',
+        score: expenseTrendScore,
+        maxScore: 30,
+      });
+      score += expenseTrendScore;
+    }
+
+    // Factor 3: Balance Position (0-20 points)
+    // Positive balance = 20 points, Negative balance = 0 points (scaled)
+    let balanceScore = 0;
+    if (totals.balance > 0) {
+      balanceScore = 20;
+    } else if (totals.balance === 0) {
+      balanceScore = 10;
+    } else {
+      // Negative balance: score decreases with severity
+      // If balance is -50% of income or worse = 0 points
+      const balanceRatio = totals.income > 0 ? Math.abs(totals.balance) / totals.income : 1;
+      balanceScore = Math.max(0, 20 * (1 - Math.min(1, balanceRatio * 2)));
+    }
+    score += balanceScore;
+    factors.push({
+      name: 'Balance',
+      score: balanceScore,
+      maxScore: 20,
+      concern: totals.balance < 0 ? 'Negative balance' : undefined,
+    });
+
+    // Factor 4: Budget Adherence (0-10 points)
+    // No budgets over = 10 points
+    // Some budgets over = reduced points
+    let budgetScore = 10;
+    if (budgetStatus.length > 0) {
+      const overBudgetCount = budgetStatus.filter(s => s.isOverBudget).length;
+      const totalBudgets = budgetStatus.length;
+      if (overBudgetCount > 0) {
+        budgetScore = 10 * (1 - (overBudgetCount / totalBudgets));
+      }
+    }
+    score += budgetScore;
+    factors.push({
+      name: 'Budget Adherence',
+      score: budgetScore,
+      maxScore: 10,
+      concern: budgetScore < 10 ? `${budgetStatus.filter(s => s.isOverBudget).length} budget(s) exceeded` : undefined,
+    });
+
+    // Clamp score between 0-100
+    score = Math.max(0, Math.min(100, score));
+
+    // Determine rating
+    let rating: 'Excellent' | 'Good' | 'Fair' | 'Poor';
+    let ratingColor: string;
+    if (score >= 80) {
+      rating = 'Excellent';
+      ratingColor = '#10b981'; // green
+    } else if (score >= 60) {
+      rating = 'Good';
+      ratingColor = '#3b82f6'; // blue
+    } else if (score >= 40) {
+      rating = 'Fair';
+      ratingColor = '#f59e0b'; // amber
+    } else {
+      rating = 'Poor';
+      ratingColor = '#ef4444'; // red
+    }
+
+    return {
+      score: Math.round(score),
+      rating,
+      ratingColor,
+      factors,
+    };
+  }, [totals, spendingTrends, budgetStatus]);
 
   // Pie chart data
   const pieChartData = useMemo(() => {
@@ -523,6 +665,10 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
           <h3>Balance</h3>
           <p className="summary-amount">{formatCurrency(totals.balance)}</p>
         </div>
+        <div className={`summary-card card-saving ${totals.savingPercentage >= 0 ? 'positive' : 'negative'}`}>
+          <h3>Saving Percentage</h3>
+          <p className="summary-amount">{totals.savingPercentage.toFixed(1)}%</p>
+        </div>
       </div>
 
       {chartData.length > 0 && (
@@ -592,6 +738,108 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
           </div>
         </div>
       )}
+
+      {/* Savings Score */}
+      <div style={{ 
+        marginTop: '32px', 
+        padding: '24px', 
+        backgroundColor: 'var(--light-bg)', 
+        borderRadius: '12px', 
+        border: `2px solid ${savingsScore.ratingColor}20`,
+        boxShadow: 'var(--shadow)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
+          <div>
+            <h3 style={{ margin: '0 0 8px 0', color: 'var(--text-color)' }}>Savings Score</h3>
+            <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
+              Overall financial health assessment
+            </p>
+          </div>
+          <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'flex-end',
+            gap: '8px',
+          }}>
+            <div style={{
+              fontSize: '48px',
+              fontWeight: 700,
+              color: savingsScore.ratingColor,
+              lineHeight: 1,
+            }}>
+              {savingsScore.score}
+            </div>
+            <div style={{
+              padding: '6px 16px',
+              borderRadius: '20px',
+              backgroundColor: `${savingsScore.ratingColor}20`,
+              color: savingsScore.ratingColor,
+              fontSize: '14px',
+              fontWeight: 600,
+            }}>
+              {savingsScore.rating}
+            </div>
+          </div>
+        </div>
+
+        {/* Score Breakdown */}
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+          gap: '12px', 
+          marginTop: '20px' 
+        }}>
+          {savingsScore.factors.map((factor, index) => {
+            const percentage = (factor.score / factor.maxScore) * 100;
+            const color = percentage >= 80 ? '#10b981' : percentage >= 60 ? '#3b82f6' : percentage >= 40 ? '#f59e0b' : '#ef4444';
+            
+            return (
+              <div 
+                key={index}
+                style={{ 
+                  padding: '12px', 
+                  backgroundColor: 'var(--card-bg)', 
+                  borderRadius: '8px', 
+                  border: '1px solid var(--border-color)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-color)' }}>
+                    {factor.name}
+                  </span>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: color }}>
+                    {factor.score.toFixed(1)}/{factor.maxScore}
+                  </span>
+                </div>
+                <div style={{
+                  width: '100%',
+                  height: '6px',
+                  backgroundColor: 'var(--border-color)',
+                  borderRadius: '3px',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    width: `${percentage}%`,
+                    height: '100%',
+                    backgroundColor: color,
+                    transition: 'width 0.3s ease',
+                  }} />
+                </div>
+                {factor.concern && (
+                  <div style={{ 
+                    marginTop: '6px', 
+                    fontSize: '11px', 
+                    color: '#ef4444',
+                    fontStyle: 'italic',
+                  }}>
+                    ⚠ {factor.concern}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {spendingTrends && (
         <div className="trends-section" style={{ marginTop: '32px', padding: '20px', backgroundColor: 'var(--light-bg)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
@@ -780,15 +1028,18 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
         <div className="pie-chart-section" style={{ marginTop: '32px' }}>
           <h3>Expenses by Bucket (Pie Chart)</h3>
           <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
-            <ResponsiveContainer width="100%" height={400}>
+            <ResponsiveContainer width="100%" height={isMobile ? 300 : 400}>
               <PieChart>
                 <Pie
                   data={pieChartData}
                   cx="50%"
                   cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
-                  outerRadius={120}
+                  labelLine={!isMobile}
+                  label={isMobile 
+                    ? false 
+                    : ({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`
+                  }
+                  outerRadius={isMobile ? 80 : 120}
                   fill="#8884d8"
                   dataKey="value"
                 >
@@ -797,6 +1048,14 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
                   ))}
                 </Pie>
                 <Tooltip formatter={(value: number | undefined) => formatCurrency(value || 0)} />
+                {isMobile && <Legend 
+                  wrapperStyle={{ paddingTop: '20px' }}
+                  formatter={(value, entry: any) => {
+                    const dataEntry = pieChartData.find(d => d.name === value);
+                    const percent = dataEntry ? ((dataEntry.value / pieChartData.reduce((sum, d) => sum + d.value, 0)) * 100).toFixed(0) : '0';
+                    return `${value} (${percent}%)`;
+                  }}
+                />}
               </PieChart>
             </ResponsiveContainer>
           </div>

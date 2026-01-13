@@ -17,7 +17,7 @@ export interface Transaction {
   notes?: string; // Optional notes
 }
 
-export type RecurringFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
+export type RecurringFrequency = 'daily' | 'weekly' | 'fortnightly' | 'monthly' | 'yearly';
 
 export interface RecurringTransaction {
   id: string;

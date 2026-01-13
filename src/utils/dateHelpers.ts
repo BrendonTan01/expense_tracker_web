@@ -29,6 +29,9 @@ export function getNextOccurrence(
       case 'weekly':
         next.setDate(next.getDate() + 7);
         break;
+      case 'fortnightly':
+        next.setDate(next.getDate() + 14);
+        break;
       case 'monthly': {
         // Get the desired day of month from the start date
         // This ensures we always try to use the same day each month

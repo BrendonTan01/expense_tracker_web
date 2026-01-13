@@ -133,6 +133,7 @@ export default function RecurringTransactionManager({
               >
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
+                <option value="fortnightly">Fortnightly</option>
                 <option value="monthly">Monthly</option>
                 <option value="yearly">Yearly</option>
               </select>

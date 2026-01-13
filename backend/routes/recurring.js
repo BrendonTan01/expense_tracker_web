@@ -40,8 +40,8 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'id, transaction, frequency, and startDate are required' });
     }
     
-    if (!['daily', 'weekly', 'monthly', 'yearly'].includes(frequency)) {
-      return res.status(400).json({ error: 'frequency must be daily, weekly, monthly, or yearly' });
+    if (!['daily', 'weekly', 'fortnightly', 'monthly', 'yearly'].includes(frequency)) {
+      return res.status(400).json({ error: 'frequency must be daily, weekly, fortnightly, monthly, or yearly' });
     }
     
     if (transaction.type !== 'expense' && transaction.type !== 'income') {
@@ -85,8 +85,8 @@ router.put('/:id', (req, res) => {
       return res.status(400).json({ error: 'transaction, frequency, and startDate are required' });
     }
     
-    if (!['daily', 'weekly', 'monthly', 'yearly'].includes(frequency)) {
-      return res.status(400).json({ error: 'frequency must be daily, weekly, monthly, or yearly' });
+    if (!['daily', 'weekly', 'fortnightly', 'monthly', 'yearly'].includes(frequency)) {
+      return res.status(400).json({ error: 'frequency must be daily, weekly, fortnightly, monthly, or yearly' });
     }
     
     if (transaction.type !== 'expense' && transaction.type !== 'income') {
