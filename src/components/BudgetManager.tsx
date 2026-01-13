@@ -160,14 +160,6 @@ export default function BudgetManager({
     resetForm();
   };
 
-  const getBudgetLabel = (budget: Budget) => {
-    if (budget.period === 'monthly' && budget.month) {
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return `${monthNames[budget.month - 1]} ${budget.year}`;
-    }
-    return `${budget.year}`;
-  };
-
   // Bulk edit functions
   const startBulkEdit = (group: MonthlyBudgetGroup) => {
     setBulkEditGroup(group);
