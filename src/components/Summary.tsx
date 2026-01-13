@@ -1050,7 +1050,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
                 <Tooltip formatter={(value: number | undefined) => formatCurrency(value || 0)} />
                 {isMobile && <Legend 
                   wrapperStyle={{ paddingTop: '20px' }}
-                  formatter={(value, entry: any) => {
+                  formatter={(value) => {
                     const dataEntry = pieChartData.find(d => d.name === value);
                     const percent = dataEntry ? ((dataEntry.value / pieChartData.reduce((sum, d) => sum + d.value, 0)) * 100).toFixed(0) : '0';
                     return `${value} (${percent}%)`;
