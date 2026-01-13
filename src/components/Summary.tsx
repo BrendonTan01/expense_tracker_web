@@ -621,6 +621,65 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
         </div>
       )}
 
+      {/* Budget Alerts */}
+      {budgetStatus.length > 0 && (
+        <>
+          {budgetStatus.some(s => s.isOverBudget || s.percentage >= 80) && (
+            <div style={{
+              marginTop: '32px',
+              padding: '16px',
+              borderRadius: '8px',
+              border: '2px solid var(--warning-color)',
+              backgroundColor: '#fff7ed',
+            }}>
+              <h3 style={{ margin: '0 0 12px 0', color: 'var(--warning-color)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                ⚠️ Budget Alerts
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {budgetStatus
+                  .filter(s => s.isOverBudget || s.percentage >= 80)
+                  .map(status => (
+                    <div
+                      key={status.budget.id}
+                      style={{
+                        padding: '12px',
+                        backgroundColor: status.isOverBudget ? '#fee' : '#fff7ed',
+                        borderRadius: '6px',
+                        border: `1px solid ${status.isOverBudget ? '#ef4444' : '#f59e0b'}`,
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span
+                            style={{
+                              width: '12px',
+                              height: '12px',
+                              backgroundColor: status.bucket?.color || '#ccc',
+                              borderRadius: '3px',
+                              display: 'inline-block',
+                            }}
+                          />
+                          <strong>{status.bucket?.name || 'Unknown'}</strong>
+                        </div>
+                        <span style={{
+                          color: status.isOverBudget ? '#ef4444' : '#f59e0b',
+                          fontWeight: 600,
+                          fontSize: '14px',
+                        }}>
+                          {status.isOverBudget
+                            ? `Exceeded by ${formatCurrency(Math.abs(status.remaining))}`
+                            : `${status.percentage.toFixed(0)}% used - ${formatCurrency(status.remaining)} remaining`
+                          }
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
       {budgetStatus.length > 0 && (
         <div className="budget-status" style={{ marginTop: '32px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>

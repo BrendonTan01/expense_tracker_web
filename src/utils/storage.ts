@@ -1,32 +1,44 @@
-import { AppState } from '../types';
+// Storage utilities for client-side data (templates, presets, goals, theme)
 
-const STORAGE_KEY = 'expense-tracker-state';
+const STORAGE_PREFIX = 'expense_tracker_';
 
-export function saveState(state: AppState): void {
+export function getStorageKey(key: string): string {
+  return `${STORAGE_PREFIX}${key}`;
+}
+
+export function saveToLocalStorage<T>(key: string, data: T): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const storageKey = getStorageKey(key);
+    localStorage.setItem(storageKey, JSON.stringify(data));
   } catch (error) {
-    console.error('Failed to save state to localStorage:', error);
+    console.error(`Failed to save to localStorage: ${key}`, error);
   }
 }
 
-export function loadState(): AppState {
+export function loadFromLocalStorage<T>(key: string, defaultValue: T): T {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      return JSON.parse(saved);
+    const storageKey = getStorageKey(key);
+    const item = localStorage.getItem(storageKey);
+    if (item === null) {
+      return defaultValue;
     }
+    return JSON.parse(item) as T;
   } catch (error) {
-    console.error('Failed to load state from localStorage:', error);
+    console.error(`Failed to load from localStorage: ${key}`, error);
+    return defaultValue;
   }
-  return {
-    buckets: [],
-    transactions: [],
-    recurringTransactions: [],
-    budgets: [],
-  };
 }
 
+export function removeFromLocalStorage(key: string): void {
+  try {
+    const storageKey = getStorageKey(key);
+    localStorage.removeItem(storageKey);
+  } catch (error) {
+    console.error(`Failed to remove from localStorage: ${key}`, error);
+  }
+}
+
+// Generate a simple ID
 export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }

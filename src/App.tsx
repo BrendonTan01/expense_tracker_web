@@ -1,5 +1,5 @@
 import { useState, useEffect, Component, ReactNode, Suspense, lazy } from 'react';
-import { AppState, Transaction, Bucket, RecurringTransaction, Budget } from './types';
+import { AppState, Transaction, Bucket, RecurringTransaction, Budget, TransactionTemplate } from './types';
 import { generateId } from './utils/storage';
 import { appStateApi, bucketsApi, transactionsApi, recurringApi, budgetsApi } from './utils/api';
 import { shouldGenerateTransaction, getNextOccurrence } from './utils/dateHelpers';
@@ -9,6 +9,11 @@ import TransactionForm from './components/TransactionForm';
 import TransactionList from './components/TransactionList';
 import Login from './components/Login';
 import Settings from './components/Settings';
+import DataBackup from './components/DataBackup';
+import TransactionTemplates from './components/TransactionTemplates';
+import DarkModeToggle from './components/DarkModeToggle';
+import SpendingGoals from './components/SpendingGoals';
+import EnhancedAnalytics from './components/EnhancedAnalytics';
 
 // Lazy load heavy components to reduce initial bundle size
 const Summary = lazy(() => import('./components/Summary'));
@@ -257,6 +262,112 @@ function App() {
     }
   };
 
+  const handleDuplicateTransaction = (transaction: Transaction) => {
+    setEditingTransaction(null);
+    handleAddTransaction({
+      type: transaction.type,
+      amount: transaction.amount,
+      description: transaction.description,
+      bucketId: transaction.bucketId,
+      date: new Date().toISOString().split('T')[0],
+      tags: transaction.tags,
+      notes: transaction.notes,
+    });
+  };
+
+  const handleCreateRecurringFromTransaction = async (transaction: Transaction) => {
+    if (!transaction.bucketId && transaction.type === 'expense') {
+      setError('Expense transactions need a bucket to create a recurring transaction.');
+      return;
+    }
+
+    try {
+      const newRecurring: RecurringTransaction = {
+        id: generateId(),
+        transaction: {
+          type: transaction.type,
+          amount: transaction.amount,
+          description: transaction.description,
+          bucketId: transaction.bucketId,
+          tags: transaction.tags,
+          notes: transaction.notes,
+        },
+        frequency: 'monthly',
+        startDate: transaction.date,
+      };
+      await handleAddRecurring(newRecurring);
+      setActiveTab('recurring');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create recurring transaction');
+      console.error('Failed to create recurring transaction:', err);
+    }
+  };
+
+  const handleBulkDeleteTransactions = async (ids: string[]) => {
+    try {
+      await Promise.all(ids.map(id => transactionsApi.delete(id)));
+      setState((prev) => ({
+        ...prev,
+        transactions: prev.transactions.filter(t => !ids.includes(t.id)),
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete transactions');
+      console.error('Failed to delete transactions:', err);
+    }
+  };
+
+  const handleUseTemplate = (template: TransactionTemplate) => {
+    setEditingTransaction(null);
+    handleAddTransaction({
+      type: template.type,
+      amount: template.amount || 0,
+      description: template.description,
+      bucketId: template.bucketId,
+      date: new Date().toISOString().split('T')[0],
+      tags: template.tags,
+      notes: template.notes,
+    });
+  };
+
+  const handleImportData = async (importedData: AppState) => {
+    try {
+      // Import buckets
+      const importedBuckets = await Promise.all(
+        importedData.buckets.map(b => bucketsApi.create(b))
+      );
+
+      // Import transactions
+      const importedTransactions = await Promise.all(
+        importedData.transactions.map(t => transactionsApi.create({
+          ...t,
+          id: generateId(),
+        }))
+      );
+
+      // Import recurring transactions
+      const importedRecurring = await Promise.all(
+        importedData.recurringTransactions.map(r => recurringApi.create(r))
+      );
+
+      // Import budgets
+      const importedBudgets = await Promise.all(
+        importedData.budgets.map(b => budgetsApi.create(b))
+      );
+
+      setState({
+        buckets: importedBuckets,
+        transactions: importedTransactions,
+        recurringTransactions: importedRecurring,
+        budgets: importedBudgets,
+      });
+
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import data');
+      console.error('Failed to import data:', err);
+    }
+  };
+
   const handleDeleteTransaction = async (id: string) => {
     try {
       await transactionsApi.delete(id);
@@ -422,6 +533,7 @@ function App() {
         <div className="app-header-top">
           <h1>Expense Tracker</h1>
           <div className="app-header-user-info">
+            <DarkModeToggle />
             <span className="user-email">{user.email}</span>
             <button
               onClick={logout}
@@ -471,6 +583,8 @@ function App() {
         {activeTab === 'summary' && (
           <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading summary...</div>}>
             <Summary transactions={state.transactions} buckets={state.buckets} budgets={state.budgets} />
+            <SpendingGoals transactions={state.transactions} buckets={state.buckets} />
+            <EnhancedAnalytics transactions={state.transactions} buckets={state.buckets} />
           </Suspense>
         )}
 
@@ -497,10 +611,15 @@ function App() {
               </div>
             ) : (
               <>
+                <TransactionTemplates
+                  buckets={state.buckets}
+                  onUseTemplate={handleUseTemplate}
+                />
                 <div className="transactions-form-section">
                   <h2>{editingTransaction ? 'Edit' : 'Add'} Transaction</h2>
                   <TransactionForm
                     buckets={state.buckets}
+                    transactions={state.transactions}
                     onSubmit={handleAddTransaction}
                     onCancel={editingTransaction ? handleCancelEdit : undefined}
                     initialTransaction={editingTransaction || undefined}
@@ -511,6 +630,9 @@ function App() {
                   buckets={state.buckets}
                   onDelete={handleDeleteTransaction}
                   onEdit={handleEditTransaction}
+                  onDuplicate={handleDuplicateTransaction}
+                  onCreateRecurring={handleCreateRecurringFromTransaction}
+                  onBulkDelete={handleBulkDeleteTransactions}
                 />
               </>
             )}
@@ -524,10 +646,18 @@ function App() {
         )}
 
         {activeTab === 'settings' && (
-          <Settings
-            activeSubTab={getActiveSubTab()}
-            onNavigate={handleSettingsNavigate}
-          />
+          <>
+            <Settings
+              activeSubTab={getActiveSubTab()}
+              onNavigate={handleSettingsNavigate}
+            />
+            <div style={{ marginTop: '32px' }}>
+              <DataBackup
+                appState={state}
+                onImport={handleImportData}
+              />
+            </div>
+          </>
         )}
 
         {activeTab === 'buckets' && (

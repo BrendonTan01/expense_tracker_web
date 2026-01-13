@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Transaction, Bucket } from '../types';
+import { checkForDuplicates } from '../utils/duplicateDetection';
 
 interface TransactionFormProps {
   buckets: Bucket[];
+  transactions: Transaction[];
   onSubmit: (transaction: Omit<Transaction, 'id' | 'isRecurring' | 'recurringId'>) => void;
   onCancel?: () => void;
   initialTransaction?: Partial<Transaction>;
@@ -10,6 +12,7 @@ interface TransactionFormProps {
 
 export default function TransactionForm({
   buckets,
+  transactions,
   onSubmit,
   onCancel,
   initialTransaction,
@@ -26,6 +29,7 @@ export default function TransactionForm({
   const [tags, setTags] = useState<string[]>(initialTransaction?.tags || []);
   const [tagInput, setTagInput] = useState('');
   const [notes, setNotes] = useState(initialTransaction?.notes || '');
+  const [duplicateWarning, setDuplicateWarning] = useState<{ message: string; similar: Transaction[] } | null>(null);
 
   const handleAddTag = () => {
     if (tagInput.trim() && !tags.includes(tagInput.trim())) {
@@ -34,11 +38,60 @@ export default function TransactionForm({
     }
   };
 
+  // Check for duplicates when form data changes (only for new transactions)
+  useEffect(() => {
+    if (initialTransaction || !amount || !description) {
+      setDuplicateWarning(null);
+      return;
+    }
+
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      setDuplicateWarning(null);
+      return;
+    }
+
+    const duplicateCheck = checkForDuplicates(
+      {
+        type,
+        amount: numAmount,
+        description,
+        bucketId: type === 'expense' ? bucketId : undefined,
+        date,
+        tags: tags.length > 0 ? tags : undefined,
+        notes: notes || undefined,
+      },
+      transactions.filter(t => t.id !== initialTransaction?.id), // Exclude current transaction if editing
+      24 // 24 hour window
+    );
+
+    if (duplicateCheck.isDuplicate) {
+      setDuplicateWarning({
+        message: `Possible duplicate detected (${duplicateCheck.confidence} confidence)`,
+        similar: duplicateCheck.similarTransactions,
+      });
+    } else {
+      setDuplicateWarning(null);
+    }
+  }, [type, amount, description, bucketId, date, tags, notes, transactions, initialTransaction]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) return;
     if (type === 'expense' && !bucketId) return;
+
+    // Warn if duplicate but allow submission
+    if (duplicateWarning && duplicateWarning.similar.length > 0) {
+      const proceed = window.confirm(
+        `Warning: This transaction looks similar to ${duplicateWarning.similar.length} other transaction(s).\n\n` +
+        `Similar transactions:\n${duplicateWarning.similar.slice(0, 3).map(t => 
+          `- ${t.description} (${t.date})`
+        ).join('\n')}\n\n` +
+        `Do you want to proceed anyway?`
+      );
+      if (!proceed) return;
+    }
 
     onSubmit({
       type,
@@ -59,11 +112,34 @@ export default function TransactionForm({
       setTags([]);
       setTagInput('');
       setNotes('');
+      setDuplicateWarning(null);
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="transaction-form">
+      {duplicateWarning && duplicateWarning.similar.length > 0 && (
+        <div style={{
+          padding: '12px',
+          backgroundColor: '#fff3cd',
+          border: '1px solid #ffc107',
+          borderRadius: '4px',
+          marginBottom: '16px',
+          fontSize: '14px',
+        }}>
+          <strong>⚠️ {duplicateWarning.message}</strong>
+          <div style={{ marginTop: '8px', fontSize: '12px', color: '#856404' }}>
+            Similar transactions:
+            <ul style={{ marginTop: '4px', paddingLeft: '20px' }}>
+              {duplicateWarning.similar.slice(0, 3).map(t => (
+                <li key={t.id}>
+                  {t.description} - {new Date(t.date).toLocaleDateString()} - ${t.amount.toFixed(2)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
       <div className="form-group">
         <label>Type</label>
         <div className="radio-group">

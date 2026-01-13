@@ -56,3 +56,41 @@ export interface AppState {
   recurringTransactions: RecurringTransaction[];
   budgets: Budget[];
 }
+
+// Transaction Template
+export interface TransactionTemplate {
+  id: string;
+  name: string;
+  type: 'expense' | 'income';
+  amount?: number;
+  description: string;
+  bucketId?: string;
+  tags?: string[];
+  notes?: string;
+}
+
+// Spending Goal
+export interface SpendingGoal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  deadline?: string; // ISO format
+  bucketId?: string; // Optional: goal for specific bucket
+  type: 'savings' | 'spending_limit';
+}
+
+// Filter Preset
+export interface FilterPreset {
+  id: string;
+  name: string;
+  filters: {
+    type?: 'expense' | 'income' | 'all';
+    bucketId?: string;
+    tag?: string;
+    startDate?: string;
+    endDate?: string;
+    minAmount?: number;
+    maxAmount?: number;
+  };
+}

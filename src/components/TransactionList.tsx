@@ -1,19 +1,28 @@
-import { useState, useMemo } from 'react';
-import { Transaction, Bucket } from '../types';
+import { useState, useMemo, useEffect } from 'react';
+import { Transaction, Bucket, FilterPreset, RecurringTransaction } from '../types';
 import { formatDate, formatCurrency } from '../utils/dateHelpers';
+import { saveToLocalStorage, loadFromLocalStorage, generateId } from '../utils/storage';
 
 interface TransactionListProps {
   transactions: Transaction[];
   buckets: Bucket[];
   onDelete: (id: string) => void;
   onEdit?: (transaction: Transaction) => void;
+  onDuplicate?: (transaction: Transaction) => void;
+  onCreateRecurring?: (transaction: Transaction) => void;
+  onBulkDelete?: (ids: string[]) => void;
 }
+
+const PRESETS_STORAGE_KEY = 'filter_presets';
 
 export default function TransactionList({
   transactions,
   buckets,
   onDelete,
   onEdit,
+  onDuplicate,
+  onCreateRecurring,
+  onBulkDelete,
 }: TransactionListProps) {
   const [filterType, setFilterType] = useState<'all' | 'expense' | 'income'>('all');
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
@@ -26,6 +35,11 @@ export default function TransactionList({
   const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkMode, setBulkMode] = useState(false);
+  const [presets, setPresets] = useState<FilterPreset[]>([]);
+  const [showPresetForm, setShowPresetForm] = useState(false);
+  const [presetName, setPresetName] = useState('');
 
   const getBucketName = (bucketId?: string) => {
     if (!bucketId) return null;
@@ -135,6 +149,84 @@ export default function TransactionList({
     document.body.removeChild(link);
   };
 
+  useEffect(() => {
+    const saved = loadFromLocalStorage<FilterPreset[]>(PRESETS_STORAGE_KEY, []);
+    setPresets(saved);
+  }, []);
+
+  const savePresets = (newPresets: FilterPreset[]) => {
+    setPresets(newPresets);
+    saveToLocalStorage(PRESETS_STORAGE_KEY, newPresets);
+  };
+
+  const applyPreset = (preset: FilterPreset) => {
+    setFilterType(preset.filters.type || 'all');
+    setFilterBucket(preset.filters.bucketId || 'all');
+    setFilterTag(preset.filters.tag || 'all');
+    setStartDate(preset.filters.startDate || '');
+    setEndDate(preset.filters.endDate || '');
+    setMinAmount(preset.filters.minAmount?.toString() || '');
+    setMaxAmount(preset.filters.maxAmount?.toString() || '');
+    setShowAdvancedFilters(true);
+  };
+
+  const saveCurrentAsPreset = () => {
+    if (!presetName.trim()) return;
+    
+    const preset: FilterPreset = {
+      id: generateId(),
+      name: presetName,
+      filters: {
+        type: filterType !== 'all' ? filterType : undefined,
+        bucketId: filterBucket !== 'all' ? filterBucket : undefined,
+        tag: filterTag !== 'all' ? filterTag : undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        minAmount: minAmount ? parseFloat(minAmount) : undefined,
+        maxAmount: maxAmount ? parseFloat(maxAmount) : undefined,
+      },
+    };
+    
+    savePresets([...presets, preset]);
+    setPresetName('');
+    setShowPresetForm(false);
+  };
+
+  const deletePreset = (id: string) => {
+    savePresets(presets.filter(p => p.id !== id));
+  };
+
+  const toggleSelection = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const selectAll = () => {
+    setSelectedIds(new Set(sortedTransactions.map(t => t.id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    if (window.confirm(`Delete ${selectedIds.size} selected transaction(s)?`)) {
+      if (onBulkDelete) {
+        onBulkDelete(Array.from(selectedIds));
+      } else {
+        selectedIds.forEach(id => onDelete(id));
+      }
+      setSelectedIds(new Set());
+      setBulkMode(false);
+    }
+  };
+
   const clearFilters = () => {
     setSearchQuery('');
     setFilterBucket('all');
@@ -150,17 +242,116 @@ export default function TransactionList({
       <div className="transaction-list-header">
         <h2>Transactions</h2>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <button onClick={handleExportCSV} className="btn btn-sm btn-secondary">
-            Export CSV
-          </button>
-          <button
-            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className="btn btn-sm btn-secondary"
-          >
-            {showAdvancedFilters ? 'Hide' : 'Show'} Filters
-          </button>
+          {bulkMode && (
+            <>
+              <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+                {selectedIds.size} selected
+              </span>
+              <button onClick={selectAll} className="btn btn-sm btn-secondary">
+                Select All
+              </button>
+              <button onClick={clearSelection} className="btn btn-sm btn-secondary">
+                Clear
+              </button>
+              {onBulkDelete && (
+                <button onClick={handleBulkDelete} className="btn btn-sm btn-danger">
+                  Delete Selected
+                </button>
+              )}
+              <button onClick={() => { setBulkMode(false); clearSelection(); }} className="btn btn-sm btn-secondary">
+                Cancel
+              </button>
+            </>
+          )}
+          {!bulkMode && (
+            <>
+              <button onClick={() => setBulkMode(true)} className="btn btn-sm btn-secondary">
+                Bulk Select
+              </button>
+              <button onClick={handleExportCSV} className="btn btn-sm btn-secondary">
+                Export CSV
+              </button>
+              <button
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className="btn btn-sm btn-secondary"
+              >
+                {showAdvancedFilters ? 'Hide' : 'Show'} Filters
+              </button>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Filter Presets */}
+      {presets.length > 0 && (
+        <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: '14px', fontWeight: 500 }}>Presets:</span>
+          {presets.map(preset => (
+            <button
+              key={preset.id}
+              onClick={() => applyPreset(preset)}
+              className="btn btn-sm btn-secondary"
+              style={{ position: 'relative' }}
+            >
+              {preset.name}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deletePreset(preset.id);
+                }}
+                style={{
+                  marginLeft: '8px',
+                  background: 'none',
+                  border: 'none',
+                  color: 'inherit',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  padding: 0,
+                }}
+                title="Delete preset"
+              >
+                ×
+              </button>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {showPresetForm && (
+        <div style={{
+          padding: '12px',
+          background: 'var(--light-bg)',
+          borderRadius: '8px',
+          marginBottom: '16px',
+          border: '1px solid var(--border-color)',
+          display: 'flex',
+          gap: '8px',
+          alignItems: 'center'
+        }}>
+          <input
+            type="text"
+            value={presetName}
+            onChange={(e) => setPresetName(e.target.value)}
+            placeholder="Preset name"
+            className="input input-sm"
+            style={{ flex: 1 }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                saveCurrentAsPreset();
+              } else if (e.key === 'Escape') {
+                setShowPresetForm(false);
+                setPresetName('');
+              }
+            }}
+          />
+          <button onClick={saveCurrentAsPreset} className="btn btn-sm btn-primary" disabled={!presetName.trim()}>
+            Save
+          </button>
+          <button onClick={() => { setShowPresetForm(false); setPresetName(''); }} className="btn btn-sm btn-secondary">
+            Cancel
+          </button>
+        </div>
+      )}
 
       <div className="filters" style={{ marginBottom: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
         <input
@@ -289,9 +480,15 @@ export default function TransactionList({
               placeholder="0.00"
             />
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
             <button onClick={clearFilters} className="btn btn-sm btn-secondary">
               Clear Filters
+            </button>
+            <button
+              onClick={() => setShowPresetForm(true)}
+              className="btn btn-sm btn-primary"
+            >
+              Save as Preset
             </button>
           </div>
         </div>
@@ -308,6 +505,19 @@ export default function TransactionList({
           <table>
             <thead>
               <tr>
+                {bulkMode && <th style={{ width: '40px' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === sortedTransactions.length && sortedTransactions.length > 0}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        selectAll();
+                      } else {
+                        clearSelection();
+                      }
+                    }}
+                  />
+                </th>}
                 <th>Date</th>
                 <th>Type</th>
                 <th>Description</th>
@@ -320,6 +530,15 @@ export default function TransactionList({
             <tbody>
               {sortedTransactions.map((transaction) => (
                 <tr key={transaction.id} className={`transaction-row transaction-${transaction.type}`}>
+                  {bulkMode && (
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(transaction.id)}
+                        onChange={() => toggleSelection(transaction.id)}
+                      />
+                    </td>
+                  )}
                   <td>{formatDate(transaction.date)}</td>
                   <td>
                     <span className={`badge badge-${transaction.type}`}>
@@ -371,21 +590,43 @@ export default function TransactionList({
                     {formatCurrency(transaction.amount)}
                   </td>
                   <td>
-                    <div className="action-buttons">
-                      {onEdit && (
+                    <div className="action-buttons" style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                      {onEdit && !bulkMode && (
                         <button
                           onClick={() => onEdit(transaction)}
                           className="btn btn-sm btn-secondary"
+                          title="Edit transaction"
                         >
                           Edit
                         </button>
                       )}
-                      <button
-                        onClick={() => onDelete(transaction.id)}
-                        className="btn btn-sm btn-danger"
-                      >
-                        Delete
-                      </button>
+                      {onDuplicate && !bulkMode && (
+                        <button
+                          onClick={() => onDuplicate(transaction)}
+                          className="btn btn-sm btn-secondary"
+                          title="Duplicate transaction"
+                        >
+                          📋
+                        </button>
+                      )}
+                      {onCreateRecurring && !bulkMode && (
+                        <button
+                          onClick={() => onCreateRecurring(transaction)}
+                          className="btn btn-sm btn-secondary"
+                          title="Create recurring transaction"
+                        >
+                          🔄
+                        </button>
+                      )}
+                      {!bulkMode && (
+                        <button
+                          onClick={() => onDelete(transaction.id)}
+                          className="btn btn-sm btn-danger"
+                          title="Delete transaction"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

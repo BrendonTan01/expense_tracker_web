@@ -1109,3 +1109,36 @@ td {
     padding: 16px;
   }
 }
+
+/* Dark Mode */
+.dark-mode {
+  --primary-color: #818cf8;
+  --primary-dark: #6366f1;
+  --primary-light: #a5b4fc;
+  --secondary-color: #94a3b8;
+  --success-color: #34d399;
+  --danger-color: #f87171;
+  --warning-color: #fbbf24;
+  --light-bg: #1e293b;
+  --border-color: #334155;
+  --text-color: #f1f5f9;
+  --text-muted: #94a3b8;
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+  --card-bg: #0f172a;
+  --hover-bg: #1e293b;
+}
+
+.dark-mode body {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+.dark-mode .badge-expense {
+  background-color: #7f1d1d;
+  color: #fca5a5;
+}
+
+.dark-mode .badge-income {
+  background-color: #14532d;
+  color: #86efac;
+}
