@@ -1,15 +1,19 @@
 import express from 'express';
 import { getDatabase } from '../database.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 const db = getDatabase();
 
-// GET all transactions
+// All routes require authentication
+router.use(authenticateToken);
+
+// GET all transactions for the authenticated user
 router.get('/', (req, res) => {
   try {
     const { startDate, endDate, type } = req.query;
-    let query = 'SELECT * FROM transactions WHERE 1=1';
-    const params = [];
+    let query = 'SELECT * FROM transactions WHERE user_id = ?';
+    const params = [req.userId];
     
     if (startDate) {
       query += ' AND date >= ?';
@@ -40,10 +44,10 @@ router.get('/', (req, res) => {
   }
 });
 
-// GET a single transaction by ID
+// GET a single transaction by ID (must belong to user)
 router.get('/:id', (req, res) => {
   try {
-    const transaction = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.id);
+    const transaction = db.prepare('SELECT * FROM transactions WHERE id = ? AND user_id = ?').get(req.params.id, req.userId);
     if (!transaction) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
@@ -72,12 +76,13 @@ router.post('/', (req, res) => {
     }
     
     const stmt = db.prepare(`
-      INSERT INTO transactions (id, type, amount, description, bucketId, date, isRecurring, recurringId, tags, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO transactions (id, user_id, type, amount, description, bucketId, date, isRecurring, recurringId, tags, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     stmt.run(
       id,
+      req.userId,
       type,
       amount,
       description,
@@ -103,7 +108,7 @@ router.post('/', (req, res) => {
   }
 });
 
-// PUT update a transaction
+// PUT update a transaction (must belong to user)
 router.put('/:id', (req, res) => {
   try {
     const { type, amount, description, bucketId, date, isRecurring, recurringId, tags, notes } = req.body;
@@ -119,7 +124,7 @@ router.put('/:id', (req, res) => {
     const stmt = db.prepare(`
       UPDATE transactions 
       SET type = ?, amount = ?, description = ?, bucketId = ?, date = ?, isRecurring = ?, recurringId = ?, tags = ?, notes = ?
-      WHERE id = ?
+      WHERE id = ? AND user_id = ?
     `);
     
     const result = stmt.run(
@@ -132,7 +137,8 @@ router.put('/:id', (req, res) => {
       recurringId || null,
       tags && tags.length > 0 ? JSON.stringify(tags) : null,
       notes || null,
-      req.params.id
+      req.params.id,
+      req.userId
     );
     
     if (result.changes === 0) {
@@ -150,11 +156,11 @@ router.put('/:id', (req, res) => {
   }
 });
 
-// DELETE a transaction
+// DELETE a transaction (must belong to user)
 router.delete('/:id', (req, res) => {
   try {
-    const stmt = db.prepare('DELETE FROM transactions WHERE id = ?');
-    const result = stmt.run(req.params.id);
+    const stmt = db.prepare('DELETE FROM transactions WHERE id = ? AND user_id = ?');
+    const result = stmt.run(req.params.id, req.userId);
     
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Transaction not found' });

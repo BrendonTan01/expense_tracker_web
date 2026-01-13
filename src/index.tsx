@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
+import { AuthProvider } from './contexts/AuthContext'
 import './index.css'
 
 // Root-level error boundary wrapper
@@ -72,7 +73,9 @@ if (!rootElement) {
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <RootErrorBoundary>
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </RootErrorBoundary>
   </React.StrictMode>,
 )

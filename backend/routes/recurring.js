@@ -1,23 +1,27 @@
 import express from 'express';
 import { getDatabase } from '../database.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 const db = getDatabase();
 
-// GET all recurring transactions
+// All routes require authentication
+router.use(authenticateToken);
+
+// GET all recurring transactions for the authenticated user
 router.get('/', (req, res) => {
   try {
-    const recurring = db.prepare('SELECT * FROM recurring_transactions ORDER BY startDate DESC').all();
+    const recurring = db.prepare('SELECT * FROM recurring_transactions WHERE user_id = ? ORDER BY startDate DESC').all(req.userId);
     res.json(recurring);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// GET a single recurring transaction by ID
+// GET a single recurring transaction by ID (must belong to user)
 router.get('/:id', (req, res) => {
   try {
-    const recurring = db.prepare('SELECT * FROM recurring_transactions WHERE id = ?').get(req.params.id);
+    const recurring = db.prepare('SELECT * FROM recurring_transactions WHERE id = ? AND user_id = ?').get(req.params.id, req.userId);
     if (!recurring) {
       return res.status(404).json({ error: 'Recurring transaction not found' });
     }
@@ -45,12 +49,13 @@ router.post('/', (req, res) => {
     }
     
     const stmt = db.prepare(`
-      INSERT INTO recurring_transactions (id, type, amount, description, bucketId, frequency, startDate, endDate, lastApplied)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO recurring_transactions (id, user_id, type, amount, description, bucketId, frequency, startDate, endDate, lastApplied)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     stmt.run(
       id,
+      req.userId,
       transaction.type,
       transaction.amount,
       transaction.description,
@@ -71,7 +76,7 @@ router.post('/', (req, res) => {
   }
 });
 
-// PUT update a recurring transaction
+// PUT update a recurring transaction (must belong to user)
 router.put('/:id', (req, res) => {
   try {
     const { transaction, frequency, startDate, endDate, lastApplied } = req.body;
@@ -91,7 +96,7 @@ router.put('/:id', (req, res) => {
     const stmt = db.prepare(`
       UPDATE recurring_transactions 
       SET type = ?, amount = ?, description = ?, bucketId = ?, frequency = ?, startDate = ?, endDate = ?, lastApplied = ?
-      WHERE id = ?
+      WHERE id = ? AND user_id = ?
     `);
     
     const result = stmt.run(
@@ -103,7 +108,8 @@ router.put('/:id', (req, res) => {
       startDate,
       endDate || null,
       lastApplied || null,
-      req.params.id
+      req.params.id,
+      req.userId
     );
     
     if (result.changes === 0) {
@@ -117,11 +123,11 @@ router.put('/:id', (req, res) => {
   }
 });
 
-// DELETE a recurring transaction
+// DELETE a recurring transaction (must belong to user)
 router.delete('/:id', (req, res) => {
   try {
-    const stmt = db.prepare('DELETE FROM recurring_transactions WHERE id = ?');
-    const result = stmt.run(req.params.id);
+    const stmt = db.prepare('DELETE FROM recurring_transactions WHERE id = ? AND user_id = ?');
+    const result = stmt.run(req.params.id, req.userId);
     
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Recurring transaction not found' });

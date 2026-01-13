@@ -3,9 +3,11 @@ import { AppState, Transaction, Bucket, RecurringTransaction, Budget } from './t
 import { generateId } from './utils/storage';
 import { appStateApi, bucketsApi, transactionsApi, recurringApi, budgetsApi } from './utils/api';
 import { shouldGenerateTransaction, getNextOccurrence } from './utils/dateHelpers';
+import { useAuth } from './contexts/AuthContext';
 import BucketManager from './components/BucketManager';
 import TransactionForm from './components/TransactionForm';
 import TransactionList from './components/TransactionList';
+import Login from './components/Login';
 
 // Lazy load heavy components to reduce initial bundle size
 const Summary = lazy(() => import('./components/Summary'));
@@ -48,6 +50,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 function App() {
+  const { user, logout, loading: authLoading } = useAuth();
   const [state, setState] = useState<AppState>({
     buckets: [],
     transactions: [],
@@ -60,8 +63,13 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Load state from API on mount
+  // Load state from API on mount (only when user is authenticated)
   useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     const loadData = async () => {
       try {
         setLoading(true);
@@ -79,7 +87,7 @@ function App() {
       }
     };
     loadData();
-  }, []);
+  }, [user]);
 
   // Generate transactions from recurring transactions (runs once after initial load)
   useEffect(() => {
@@ -367,6 +375,20 @@ function App() {
     }
   }, [settingsOpen]);
 
+  // Show loading while checking authentication
+  if (authLoading) {
+    return (
+      <div className="app">
+        <div style={{ padding: '2rem', textAlign: 'center' }}>Loading...</div>
+      </div>
+    );
+  }
+
+  // Show login if not authenticated
+  if (!user) {
+    return <Login />;
+  }
+
   if (loading) {
     return (
       <div className="app">
@@ -395,7 +417,26 @@ function App() {
         </div>
       )}
       <header className="app-header">
-        <h1>Expense Tracker</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+          <h1>Expense Tracker</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <span style={{ fontSize: '0.9rem', color: '#666' }}>{user.email}</span>
+            <button
+              onClick={logout}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+              }}
+            >
+              Logout
+            </button>
+          </div>
+        </div>
         <nav className="tabs">
           <button
             className={`tab ${activeTab === 'summary' ? 'active' : ''}`}

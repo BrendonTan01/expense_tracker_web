@@ -3,6 +3,7 @@ import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { initDatabase } from './database.js';
+import authRoutes from './routes/auth.js';
 import bucketRoutes from './routes/buckets.js';
 import transactionRoutes from './routes/transactions.js';
 import recurringRoutes from './routes/recurring.js';
@@ -28,6 +29,10 @@ app.use(express.json());
 initDatabase();
 
 // API Routes (must come before static file serving)
+// Auth routes (public - no authentication required)
+app.use('/api/auth', authRoutes);
+
+// Protected routes (require authentication)
 app.use('/api/buckets', bucketRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/recurring', recurringRoutes);

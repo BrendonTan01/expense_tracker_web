@@ -1,15 +1,19 @@
 import express from 'express';
 import { getDatabase } from '../database.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 const db = getDatabase();
 
-// GET all budgets
+// All routes require authentication
+router.use(authenticateToken);
+
+// GET all budgets for the authenticated user
 router.get('/', (req, res) => {
   try {
     const { bucketId, period, year, month } = req.query;
-    let query = 'SELECT * FROM budgets WHERE 1=1';
-    const params = [];
+    let query = 'SELECT * FROM budgets WHERE user_id = ?';
+    const params = [req.userId];
 
     if (bucketId) {
       query += ' AND bucketId = ?';
@@ -37,10 +41,10 @@ router.get('/', (req, res) => {
   }
 });
 
-// GET a single budget by ID
+// GET a single budget by ID (must belong to user)
 router.get('/:id', (req, res) => {
   try {
-    const budget = db.prepare('SELECT * FROM budgets WHERE id = ?').get(req.params.id);
+    const budget = db.prepare('SELECT * FROM budgets WHERE id = ? AND user_id = ?').get(req.params.id, req.userId);
     if (!budget) {
       return res.status(404).json({ error: 'Budget not found' });
     }
@@ -68,11 +72,11 @@ router.post('/', (req, res) => {
     }
 
     const stmt = db.prepare(`
-      INSERT INTO budgets (id, bucketId, amount, period, year, month)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO budgets (id, user_id, bucketId, amount, period, year, month)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(id, bucketId, amount, period, parseInt(year), period === 'monthly' ? parseInt(month) : null);
+    stmt.run(id, req.userId, bucketId, amount, period, parseInt(year), period === 'monthly' ? parseInt(month) : null);
 
     const budget = db.prepare('SELECT * FROM budgets WHERE id = ?').get(id);
     res.status(201).json(budget);
@@ -84,7 +88,7 @@ router.post('/', (req, res) => {
   }
 });
 
-// PUT update a budget
+// PUT update a budget (must belong to user)
 router.put('/:id', (req, res) => {
   try {
     const { bucketId, amount, period, year, month } = req.body;
@@ -104,7 +108,7 @@ router.put('/:id', (req, res) => {
     const stmt = db.prepare(`
       UPDATE budgets
       SET bucketId = ?, amount = ?, period = ?, year = ?, month = ?
-      WHERE id = ?
+      WHERE id = ? AND user_id = ?
     `);
 
     const result = stmt.run(
@@ -113,7 +117,8 @@ router.put('/:id', (req, res) => {
       period,
       parseInt(year),
       period === 'monthly' ? parseInt(month) : null,
-      req.params.id
+      req.params.id,
+      req.userId
     );
 
     if (result.changes === 0) {
@@ -127,11 +132,11 @@ router.put('/:id', (req, res) => {
   }
 });
 
-// DELETE a budget
+// DELETE a budget (must belong to user)
 router.delete('/:id', (req, res) => {
   try {
-    const stmt = db.prepare('DELETE FROM budgets WHERE id = ?');
-    const result = stmt.run(req.params.id);
+    const stmt = db.prepare('DELETE FROM budgets WHERE id = ? AND user_id = ?');
+    const result = stmt.run(req.params.id, req.userId);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Budget not found' });
