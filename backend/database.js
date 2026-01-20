@@ -37,7 +37,7 @@ export function initDatabase() {
     CREATE TABLE IF NOT EXISTS transactions (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('expense', 'income')),
+      type TEXT NOT NULL CHECK(type IN ('expense', 'income', 'investment')),
       amount REAL NOT NULL,
       description TEXT NOT NULL,
       bucketId TEXT,
@@ -54,7 +54,7 @@ export function initDatabase() {
     CREATE TABLE IF NOT EXISTS recurring_transactions (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('expense', 'income')),
+      type TEXT NOT NULL CHECK(type IN ('expense', 'income', 'investment')),
       amount REAL NOT NULL,
       description TEXT NOT NULL,
       bucketId TEXT,

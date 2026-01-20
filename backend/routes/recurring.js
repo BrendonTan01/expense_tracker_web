@@ -44,8 +44,8 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'frequency must be daily, weekly, fortnightly, monthly, or yearly' });
     }
     
-    if (transaction.type !== 'expense' && transaction.type !== 'income') {
-      return res.status(400).json({ error: 'transaction.type must be either "expense" or "income"' });
+    if (!['expense', 'income', 'investment'].includes(transaction.type)) {
+      return res.status(400).json({ error: 'transaction.type must be either "expense", "income", or "investment"' });
     }
     
     const stmt = db.prepare(`
@@ -89,8 +89,8 @@ router.put('/:id', (req, res) => {
       return res.status(400).json({ error: 'frequency must be daily, weekly, fortnightly, monthly, or yearly' });
     }
     
-    if (transaction.type !== 'expense' && transaction.type !== 'income') {
-      return res.status(400).json({ error: 'transaction.type must be either "expense" or "income"' });
+    if (!['expense', 'income', 'investment'].includes(transaction.type)) {
+      return res.status(400).json({ error: 'transaction.type must be either "expense", "income", or "investment"' });
     }
     
     const stmt = db.prepare(`

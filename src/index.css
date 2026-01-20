@@ -477,6 +477,10 @@ td {
   background: var(--light-bg);
 }
 
+.transaction-investment {
+  border-left: 4px solid #8b5cf6;
+}
+
 .badge {
   padding: 4px 8px;
   border-radius: 4px;
@@ -495,6 +499,11 @@ td {
   color: #3c3;
 }
 
+.badge-investment {
+  background-color: #eef2ff;
+  color: #4f46e5;
+}
+
 .bucket-badge {
   padding: 4px 8px;
   background: var(--light-bg);
@@ -509,6 +518,11 @@ td {
 
 .amount-expense {
   color: var(--danger-color);
+  font-weight: 600;
+}
+
+.amount-investment {
+  color: #7c3aed;
   font-weight: 600;
 }
 
@@ -1154,6 +1168,11 @@ td {
 .dark-mode .badge-income {
   background-color: #14532d;
   color: #86efac;
+}
+
+.dark-mode .badge-investment {
+  background-color: #312e81;
+  color: #c4b5fd;
 }
 
 .duplicate-warning {

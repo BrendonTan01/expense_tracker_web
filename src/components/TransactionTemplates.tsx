@@ -149,7 +149,7 @@ export default function TransactionTemplates({ buckets, onUseTemplate }: Transac
                   type="radio"
                   value="expense"
                   checked={formData.type === 'expense'}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as 'expense' | 'income', bucketId: '' })}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as 'expense' | 'income' | 'investment', bucketId: '' })}
                 />
                 Expense
               </label>
@@ -158,9 +158,18 @@ export default function TransactionTemplates({ buckets, onUseTemplate }: Transac
                   type="radio"
                   value="income"
                   checked={formData.type === 'income'}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as 'expense' | 'income', bucketId: '' })}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as 'expense' | 'income' | 'investment', bucketId: '' })}
                 />
                 Income
+              </label>
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  value="investment"
+                  checked={formData.type === 'investment'}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as 'expense' | 'income' | 'investment', bucketId: '' })}
+                />
+                Investment
               </label>
             </div>
           </div>

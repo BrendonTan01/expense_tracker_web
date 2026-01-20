@@ -6,10 +6,10 @@ export interface Bucket {
 
 export interface Transaction {
   id: string;
-  type: 'expense' | 'income';
+  type: 'expense' | 'income' | 'investment';
   amount: number;
   description: string;
-  bucketId?: string; // Only for expenses
+  bucketId?: string; // Only for expenses (optional for investments)
   date: string; // ISO format
   isRecurring: boolean;
   recurringId?: string; // Link to RecurringTransaction if applicable
@@ -61,7 +61,7 @@ export interface AppState {
 export interface TransactionTemplate {
   id: string;
   name: string;
-  type: 'expense' | 'income';
+  type: 'expense' | 'income' | 'investment';
   amount?: number;
   description: string;
   bucketId?: string;
@@ -85,7 +85,7 @@ export interface FilterPreset {
   id: string;
   name: string;
   filters: {
-    type?: 'expense' | 'income' | 'all';
+    type?: 'expense' | 'income' | 'investment' | 'all';
     bucketId?: string;
     tag?: string;
     startDate?: string;

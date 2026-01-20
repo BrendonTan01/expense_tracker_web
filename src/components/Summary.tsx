@@ -17,6 +17,7 @@ interface ChartDataPoint {
   periodKey: string; // Original key like "2026-01" for month clicks
   income: number;
   expenses: number;
+  investments: number;
   bucketBreakdown?: Record<string, number>; // For tooltip breakdown
 }
 
@@ -39,6 +40,7 @@ const CustomTooltip = ({ active, payload, label, buckets }: CustomTooltipProps) 
     const data = payload[0].payload as ChartDataPoint;
     const incomeValue = payload.find((p: TooltipPayload) => p.dataKey === 'income')?.value as number || 0;
     const expenseValue = payload.find((p: TooltipPayload) => p.dataKey === 'expenses')?.value as number || 0;
+    const investmentValue = payload.find((p: TooltipPayload) => p.dataKey === 'investments')?.value as number || 0;
     const isDarkMode = document.documentElement.classList.contains('dark-mode');
     
     return (
@@ -97,6 +99,11 @@ const CustomTooltip = ({ active, payload, label, buckets }: CustomTooltipProps) 
               </div>
             )}
           </>
+        )}
+        {investmentValue > 0 && (
+          <p style={{ margin: '4px 0', color: '#7c3aed' }}>
+            Investments: {formatCurrency(investmentValue)}
+          </p>
         )}
       </div>
     );
@@ -186,12 +193,17 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
       .filter((t) => t.type === 'expense')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const balance = income - expenses;
+    const investments = filteredTransactions
+      .filter((t) => t.type === 'investment')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const balance = income - expenses - investments;
     const savingPercentage = income > 0 ? (balance / income) * 100 : 0;
 
     return {
       income,
       expenses,
+      investments,
       balance,
       savingPercentage,
     };
@@ -328,12 +340,29 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
       })
       .reduce((sum, t) => sum + t.amount, 0);
 
+    const currentInvestments = transactions
+      .filter((t) => {
+        const date = new Date(t.date);
+        return t.type === 'investment' && date >= currentStart && date <= currentEnd;
+      })
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const previousInvestments = transactions
+      .filter((t) => {
+        const date = new Date(t.date);
+        return t.type === 'investment' && date >= previousStart && date <= previousEnd;
+      })
+      .reduce((sum, t) => sum + t.amount, 0);
+
     const expenseChange = previousExpenses > 0 
       ? ((currentExpenses - previousExpenses) / previousExpenses) * 100 
       : 0;
     const incomeChange = previousIncome > 0 
       ? ((currentIncome - previousIncome) / previousIncome) * 100 
       : 0;
+    const investmentChange = previousInvestments > 0
+      ? ((currentInvestments - previousInvestments) / previousInvestments) * 100
+      : (currentInvestments > 0 ? 100 : 0);
 
     return {
       currentExpenses,
@@ -342,6 +371,9 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
       currentIncome,
       previousIncome,
       incomeChange,
+      currentInvestments,
+      previousInvestments,
+      investmentChange,
     };
   }, [transactions, period]);
 
@@ -482,6 +514,18 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
     }));
   }, [bucketBreakdown]);
 
+  const investmentInsights = useMemo(() => {
+    const investments = filteredTransactions.filter((t) => t.type === 'investment');
+    if (investments.length === 0) return null;
+
+    const total = investments.reduce((sum, t) => sum + t.amount, 0);
+    const average = total / investments.length;
+    const largest = investments.reduce((prev, current) => current.amount > prev.amount ? current : prev, investments[0]);
+    const mostRecent = [...investments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+    return { total, average, largest, mostRecent, count: investments.length };
+  }, [filteredTransactions]);
+
   // Prepare chart data - group by year
   const chartData = useMemo(() => {
     if (filteredTransactions.length === 0) return [];
@@ -495,7 +539,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
     // Group by month if range is less than 2 years, otherwise by year
     const groupByMonth = diffMonths <= 24;
 
-    const grouped: Record<string, { income: number; expenses: number; bucketBreakdown: Record<string, number> }> = {};
+    const grouped: Record<string, { income: number; expenses: number; investments: number; bucketBreakdown: Record<string, number> }> = {};
 
     filteredTransactions.forEach((t) => {
       const date = new Date(t.date);
@@ -508,7 +552,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
       }
 
       if (!grouped[key]) {
-        grouped[key] = { income: 0, expenses: 0, bucketBreakdown: {} };
+        grouped[key] = { income: 0, expenses: 0, investments: 0, bucketBreakdown: {} };
       }
 
       if (t.type === 'income') {
@@ -517,6 +561,8 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
         grouped[key].expenses += t.amount;
         const bucketKey = t.bucketId || 'no-bucket';
         grouped[key].bucketBreakdown[bucketKey] = (grouped[key].bucketBreakdown[bucketKey] || 0) + t.amount;
+      } else if (t.type === 'investment') {
+        grouped[key].investments += t.amount;
       }
     });
 
@@ -531,6 +577,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
           periodKey: periodKey, // Store original key for month clicks
           income: data.income,
           expenses: data.expenses,
+          investments: data.investments,
           bucketBreakdown: data.bucketBreakdown,
         };
       });
@@ -661,8 +708,12 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
           <h3>Total Expenses</h3>
           <p className="summary-amount">{formatCurrency(totals.expenses)}</p>
         </div>
+        <div className="summary-card" style={{ background: 'linear-gradient(135deg, #c7d2fe 0%, #a5b4fc 100%)', color: '#1e1b4b' }}>
+          <h3>Total Invested</h3>
+          <p className="summary-amount">{formatCurrency(totals.investments)}</p>
+        </div>
         <div className={`summary-card card-balance ${totals.balance >= 0 ? 'positive' : 'negative'}`}>
-          <h3>Balance</h3>
+          <h3>Cash After Investing</h3>
           <p className="summary-amount">{formatCurrency(totals.balance)}</p>
         </div>
         <div className={`summary-card card-saving ${totals.savingPercentage >= 0 ? 'positive' : 'negative'}`}>
@@ -671,10 +722,41 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
         </div>
       </div>
 
+      {investmentInsights && (
+        <div className="chart-container">
+          <div className="chart-title">Investing Contributions (selected period)</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+            <div style={{ background: 'var(--card-bg)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Total invested</div>
+              <div style={{ fontSize: '22px', fontWeight: 700, color: '#7c3aed' }}>{formatCurrency(investmentInsights.total)}</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{investmentInsights.count} contribution{investmentInsights.count === 1 ? '' : 's'}</div>
+            </div>
+            <div style={{ background: 'var(--card-bg)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Average per contribution</div>
+              <div style={{ fontSize: '22px', fontWeight: 700 }}>{formatCurrency(investmentInsights.average)}</div>
+            </div>
+            <div style={{ background: 'var(--card-bg)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Largest contribution</div>
+              <div style={{ fontSize: '22px', fontWeight: 700 }}>{formatCurrency(investmentInsights.largest.amount)}</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                {new Date(investmentInsights.largest.date).toLocaleDateString()}
+              </div>
+            </div>
+            <div style={{ background: 'var(--card-bg)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Most recent</div>
+              <div style={{ fontSize: '22px', fontWeight: 700 }}>{formatCurrency(investmentInsights.mostRecent.amount)}</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                {investmentInsights.mostRecent.description} • {new Date(investmentInsights.mostRecent.date).toLocaleDateString()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {chartData.length > 0 && (
         <div className="chart-container">
           <div className="chart-title">
-            Income and Expenses Over Time
+            Income, Expenses & Investments Over Time
             {period === 'thisYear' && (
               <span style={{ fontSize: '14px', fontWeight: 'normal', color: 'var(--text-muted)', marginLeft: '8px' }}>
                 (Click on a month to zoom in)
@@ -729,6 +811,20 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
                   {chartData.map((_, index) => (
                     <Cell 
                       key={`cell-expenses-${index}`} 
+                      style={{ cursor: period === 'thisYear' ? 'pointer' : 'default' }}
+                    />
+                  ))}
+                </Bar>
+                <Bar
+                  dataKey="investments"
+                  fill="#8b5cf6"
+                  name="Investments"
+                  radius={[4, 4, 0, 0]}
+                  onClick={handleBarClick}
+                >
+                  {chartData.map((_, index) => (
+                    <Cell 
+                      key={`cell-investments-${index}`} 
                       style={{ cursor: period === 'thisYear' ? 'pointer' : 'default' }}
                     />
                   ))}
@@ -867,6 +963,18 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
                 Previous: {formatCurrency(spendingTrends.previousIncome)}
+              </div>
+            </div>
+            <div style={{ padding: '16px', backgroundColor: 'var(--card-bg)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '8px' }}>Investments</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, marginBottom: '4px', color: '#7c3aed' }}>
+                {formatCurrency(spendingTrends.currentInvestments)}
+              </div>
+              <div style={{ fontSize: '14px', color: spendingTrends.investmentChange >= 0 ? '#7c3aed' : 'var(--success-color)' }}>
+                {spendingTrends.investmentChange >= 0 ? '↑' : '↓'} {Math.abs(spendingTrends.investmentChange).toFixed(1)}% vs previous period
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                Previous: {formatCurrency(spendingTrends.previousInvestments)}
               </div>
             </div>
           </div>

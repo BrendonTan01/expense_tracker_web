@@ -224,9 +224,9 @@ function App() {
   };
 
   const handleAddTransaction = async (transactionData: Omit<Transaction, 'id' | 'isRecurring' | 'recurringId'>) => {
-    // Prevent adding transactions if no buckets exist
-    if (state.buckets.length === 0) {
-      setError('Please create at least one bucket before adding transactions.');
+    // Prevent adding expense transactions if no buckets exist
+    if (transactionData.type === 'expense' && state.buckets.length === 0) {
+      setError('Please create at least one bucket before adding expense transactions.');
       setActiveTab('buckets');
       return;
     }
@@ -553,13 +553,10 @@ function App() {
           <button
             className={`tab ${activeTab === 'transactions' ? 'active' : ''}`}
             onClick={() => {
-              // Redirect to buckets if no buckets exist
               if (state.buckets.length === 0) {
-                setActiveTab('buckets');
-                setError('Please create at least one bucket before adding transactions.');
-              } else {
-                setActiveTab('transactions');
+                setError('No buckets yet. Expense entries need a bucket; income and investment entries can be added without one.');
               }
+              setActiveTab('transactions');
             }}
           >
             Transactions
@@ -590,52 +587,49 @@ function App() {
 
         {activeTab === 'transactions' && (
           <div className="transactions-view">
-            {state.buckets.length === 0 ? (
+            {state.buckets.length === 0 && (
               <div style={{ 
-                padding: '2rem', 
-                textAlign: 'center',
+                padding: '1.25rem', 
+                margin: '0 0 1rem 0',
                 backgroundColor: '#fff3cd',
                 border: '1px solid #ffc107',
-                borderRadius: '4px',
-                margin: '1rem'
+                borderRadius: '6px'
               }}>
-                <h2>No Buckets Found</h2>
-                <p>You need to create at least one bucket before you can add transactions.</p>
+                <h2 style={{ marginBottom: '0.5rem' }}>No buckets yet</h2>
+                <p style={{ marginBottom: '0.5rem' }}>
+                  You can still add income and investment entries. Create at least one bucket to start tracking expenses.
+                </p>
                 <button
                   onClick={() => setActiveTab('buckets')}
                   className="btn btn-primary"
-                  style={{ marginTop: '1rem' }}
                 >
-                  Create Buckets
+                  Create a bucket
                 </button>
               </div>
-            ) : (
-              <>
-                <TransactionTemplates
-                  buckets={state.buckets}
-                  onUseTemplate={handleUseTemplate}
-                />
-                <div className="transactions-form-section">
-                  <h2>{editingTransaction ? 'Edit' : 'Add'} Transaction</h2>
-                  <TransactionForm
-                    buckets={state.buckets}
-                    transactions={state.transactions}
-                    onSubmit={handleAddTransaction}
-                    onCancel={editingTransaction ? handleCancelEdit : undefined}
-                    initialTransaction={editingTransaction || undefined}
-                  />
-                </div>
-                <TransactionList
-                  transactions={state.transactions}
-                  buckets={state.buckets}
-                  onDelete={handleDeleteTransaction}
-                  onEdit={handleEditTransaction}
-                  onDuplicate={handleDuplicateTransaction}
-                  onCreateRecurring={handleCreateRecurringFromTransaction}
-                  onBulkDelete={handleBulkDeleteTransactions}
-                />
-              </>
             )}
+            <TransactionTemplates
+              buckets={state.buckets}
+              onUseTemplate={handleUseTemplate}
+            />
+            <div className="transactions-form-section">
+              <h2>{editingTransaction ? 'Edit' : 'Add'} Transaction</h2>
+              <TransactionForm
+                buckets={state.buckets}
+                transactions={state.transactions}
+                onSubmit={handleAddTransaction}
+                onCancel={editingTransaction ? handleCancelEdit : undefined}
+                initialTransaction={editingTransaction || undefined}
+              />
+            </div>
+            <TransactionList
+              transactions={state.transactions}
+              buckets={state.buckets}
+              onDelete={handleDeleteTransaction}
+              onEdit={handleEditTransaction}
+              onDuplicate={handleDuplicateTransaction}
+              onCreateRecurring={handleCreateRecurringFromTransaction}
+              onBulkDelete={handleBulkDeleteTransactions}
+            />
           </div>
         )}
 

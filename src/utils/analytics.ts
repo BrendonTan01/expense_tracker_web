@@ -4,6 +4,7 @@ export interface SpendingTrend {
   period: string; // e.g., "2024-01"
   income: number;
   expenses: number;
+  investments: number;
   balance: number;
   changeFromPrevious?: number; // Percentage change
 }
@@ -43,6 +44,7 @@ export function calculateSpendingTrends(
       period: periodKey,
       income: 0,
       expenses: 0,
+      investments: 0,
       balance: 0,
     });
   }
@@ -56,10 +58,12 @@ export function calculateSpendingTrends(
       const trend = trends.get(periodKey)!;
       if (t.type === 'income') {
         trend.income += t.amount;
-      } else {
+      } else if (t.type === 'expense') {
         trend.expenses += t.amount;
+      } else if (t.type === 'investment') {
+        trend.investments += t.amount;
       }
-      trend.balance = trend.income - trend.expenses;
+      trend.balance = trend.income - trend.expenses - trend.investments;
     }
   });
   
@@ -94,12 +98,12 @@ export function comparePeriods(
   previousStart: Date,
   previousEnd: Date
 ): {
-  current: { income: number; expenses: number; balance: number };
-  previous: { income: number; expenses: number; balance: number };
-  change: { income: number; expenses: number; balance: number };
+  current: { income: number; expenses: number; investments: number; balance: number };
+  previous: { income: number; expenses: number; investments: number; balance: number };
+  change: { income: number; expenses: number; investments: number; balance: number };
 } {
-  const current = { income: 0, expenses: 0, balance: 0 };
-  const previous = { income: 0, expenses: 0, balance: 0 };
+  const current = { income: 0, expenses: 0, investments: 0, balance: 0 };
+  const previous = { income: 0, expenses: 0, investments: 0, balance: 0 };
   
   transactions.forEach(t => {
     const date = new Date(t.date);
@@ -107,24 +111,29 @@ export function comparePeriods(
     if (date >= currentStart && date <= currentEnd) {
       if (t.type === 'income') {
         current.income += t.amount;
-      } else {
+      } else if (t.type === 'expense') {
         current.expenses += t.amount;
+      } else if (t.type === 'investment') {
+        current.investments += t.amount;
       }
     } else if (date >= previousStart && date <= previousEnd) {
       if (t.type === 'income') {
         previous.income += t.amount;
-      } else {
+      } else if (t.type === 'expense') {
         previous.expenses += t.amount;
+      } else if (t.type === 'investment') {
+        previous.investments += t.amount;
       }
     }
   });
   
-  current.balance = current.income - current.expenses;
-  previous.balance = previous.income - previous.expenses;
+  current.balance = current.income - current.expenses - current.investments;
+  previous.balance = previous.income - previous.expenses - previous.investments;
   
   const change = {
     income: current.income - previous.income,
     expenses: current.expenses - previous.expenses,
+    investments: current.investments - previous.investments,
     balance: current.balance - previous.balance,
   };
   

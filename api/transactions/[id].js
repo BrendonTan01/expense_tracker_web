@@ -56,8 +56,8 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'type, amount, description, and date are required' });
       }
 
-      if (type !== 'expense' && type !== 'income') {
-        return res.status(400).json({ error: 'type must be either "expense" or "income"' });
+      if (!['expense', 'income', 'investment'].includes(type)) {
+        return res.status(400).json({ error: 'type must be either "expense", "income", or "investment"' });
       }
 
       const { data, error } = await supabase

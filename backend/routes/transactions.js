@@ -71,8 +71,8 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'id, type, amount, description, and date are required' });
     }
     
-    if (type !== 'expense' && type !== 'income') {
-      return res.status(400).json({ error: 'type must be either "expense" or "income"' });
+    if (!['expense', 'income', 'investment'].includes(type)) {
+      return res.status(400).json({ error: 'type must be either "expense", "income", or "investment"' });
     }
     
     const stmt = db.prepare(`
@@ -117,8 +117,8 @@ router.put('/:id', (req, res) => {
       return res.status(400).json({ error: 'type, amount, description, and date are required' });
     }
     
-    if (type !== 'expense' && type !== 'income') {
-      return res.status(400).json({ error: 'type must be either "expense" or "income"' });
+    if (!['expense', 'income', 'investment'].includes(type)) {
+      return res.status(400).json({ error: 'type must be either "expense", "income", or "investment"' });
     }
     
     const stmt = db.prepare(`

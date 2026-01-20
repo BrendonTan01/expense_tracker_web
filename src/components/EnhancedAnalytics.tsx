@@ -34,6 +34,11 @@ export default function EnhancedAnalytics({ transactions, buckets }: EnhancedAna
     [transactions]
   );
 
+  const totalInvestments = useMemo(() =>
+    transactions.filter(t => t.type === 'investment').reduce((sum, t) => sum + t.amount, 0),
+    [transactions]
+  );
+
   const averageTransactionAmount = useMemo(() => {
     if (transactions.length === 0) return 0;
     return transactions.reduce((sum, t) => sum + t.amount, 0) / transactions.length;
@@ -83,14 +88,27 @@ export default function EnhancedAnalytics({ transactions, buckets }: EnhancedAna
           border: '1px solid var(--border-color)'
         }}>
           <div style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+            Total Investments
+          </div>
+          <div style={{ fontSize: '24px', fontWeight: 600, color: '#7c3aed' }}>
+            {formatCurrency(totalInvestments)}
+          </div>
+        </div>
+        <div style={{
+          padding: '16px',
+          background: 'var(--light-bg)',
+          borderRadius: '8px',
+          border: '1px solid var(--border-color)'
+        }}>
+          <div style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '4px' }}>
             Net Balance
           </div>
           <div style={{
             fontSize: '24px',
             fontWeight: 600,
-            color: totalIncome - totalExpenses >= 0 ? 'var(--success-color)' : 'var(--danger-color)'
+            color: totalIncome - totalExpenses - totalInvestments >= 0 ? 'var(--success-color)' : 'var(--danger-color)'
           }}>
-            {formatCurrency(totalIncome - totalExpenses)}
+            {formatCurrency(totalIncome - totalExpenses - totalInvestments)}
           </div>
         </div>
         <div style={{
@@ -127,7 +145,8 @@ export default function EnhancedAnalytics({ transactions, buckets }: EnhancedAna
               <Legend />
               <Line type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} name="Income" />
               <Line type="monotone" dataKey="expenses" stroke="#ef4444" strokeWidth={2} name="Expenses" />
-              <Line type="monotone" dataKey="balance" stroke="#6366f1" strokeWidth={2} name="Balance" />
+              <Line type="monotone" dataKey="investments" stroke="#8b5cf6" strokeWidth={2} name="Investments" />
+              <Line type="monotone" dataKey="balance" stroke="#6366f1" strokeWidth={2} name="Balance (net)" />
             </LineChart>
           </ResponsiveContainer>
         </div>

@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS buckets (
 CREATE TABLE IF NOT EXISTS recurring_transactions (
   id TEXT PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK(type IN ('expense', 'income')),
+  type TEXT NOT NULL CHECK(type IN ('expense', 'income', 'investment')),
   amount REAL NOT NULL,
   description TEXT NOT NULL,
   "bucketId" TEXT,
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS recurring_transactions (
 CREATE TABLE IF NOT EXISTS transactions (
   id TEXT PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK(type IN ('expense', 'income')),
+  type TEXT NOT NULL CHECK(type IN ('expense', 'income', 'investment')),
   amount REAL NOT NULL,
   description TEXT NOT NULL,
   "bucketId" TEXT,

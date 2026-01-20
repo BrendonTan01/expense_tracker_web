@@ -24,7 +24,7 @@ export default function TransactionList({
   onCreateRecurring,
   onBulkDelete,
 }: TransactionListProps) {
-  const [filterType, setFilterType] = useState<'all' | 'expense' | 'income'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'expense' | 'income' | 'investment'>('all');
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [searchQuery, setSearchQuery] = useState('');
@@ -370,6 +370,7 @@ export default function TransactionList({
           <option value="all">All Types</option>
           <option value="expense">Expenses</option>
           <option value="income">Income</option>
+          <option value="investment">Investments</option>
         </select>
         <select
           value={sortBy}
@@ -587,7 +588,13 @@ export default function TransactionList({
                       <span className="text-muted">—</span>
                     )}
                   </td>
-                  <td className={transaction.type === 'income' ? 'amount-income' : 'amount-expense'}>
+                  <td className={
+                    transaction.type === 'income'
+                      ? 'amount-income'
+                      : transaction.type === 'investment'
+                        ? 'amount-investment'
+                        : 'amount-expense'
+                  }>
                     {transaction.type === 'income' ? '+' : '-'}
                     {formatCurrency(transaction.amount)}
                   </td>

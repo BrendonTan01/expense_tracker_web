@@ -17,8 +17,8 @@ export default function TransactionForm({
   onCancel,
   initialTransaction,
 }: TransactionFormProps) {
-  const [type, setType] = useState<'expense' | 'income'>(
-    initialTransaction?.type || 'expense'
+  const [type, setType] = useState<'expense' | 'income' | 'investment'>(
+    (initialTransaction?.type as 'expense' | 'income' | 'investment') || 'expense'
   );
   const [amount, setAmount] = useState(initialTransaction?.amount?.toString() || '');
   const [description, setDescription] = useState(initialTransaction?.description || '');
@@ -31,6 +31,13 @@ export default function TransactionForm({
   const [notes, setNotes] = useState(initialTransaction?.notes || '');
   const [duplicateWarning, setDuplicateWarning] = useState<{ message: string; similar: Transaction[] } | null>(null);
 
+  // Automatically switch away from expense when no buckets exist
+  useEffect(() => {
+    if (buckets.length === 0 && type === 'expense') {
+      setType('income');
+    }
+  }, [buckets.length, type]);
+
   const handleAddTag = () => {
     if (tagInput.trim() && !tags.includes(tagInput.trim())) {
       setTags([...tags, tagInput.trim()]);
@@ -41,7 +48,7 @@ export default function TransactionForm({
   // Update form fields when initialTransaction changes (for editing)
   useEffect(() => {
     if (initialTransaction) {
-      setType(initialTransaction.type || 'expense');
+      setType((initialTransaction.type as 'expense' | 'income' | 'investment') || 'expense');
       setAmount(initialTransaction.amount?.toString() || '');
       setDescription(initialTransaction.description || '');
       setBucketId(initialTransaction.bucketId || '');
@@ -175,8 +182,9 @@ export default function TransactionForm({
               type="radio"
               value="expense"
               checked={type === 'expense'}
-              onChange={(e) => {
-                setType(e.target.value as 'expense' | 'income');
+              disabled={buckets.length === 0}
+                onChange={(e) => {
+                  setType(e.target.value as 'expense' | 'income' | 'investment');
                 setBucketId('');
               }}
             />
@@ -187,11 +195,28 @@ export default function TransactionForm({
               type="radio"
               value="income"
               checked={type === 'income'}
-              onChange={(e) => setType(e.target.value as 'expense' | 'income')}
+              onChange={(e) => setType(e.target.value as 'expense' | 'income' | 'investment')}
             />
             Income
           </label>
+          <label className="radio-label">
+            <input
+              type="radio"
+              value="investment"
+              checked={type === 'investment'}
+              onChange={(e) => {
+                setType(e.target.value as 'expense' | 'income' | 'investment');
+                setBucketId('');
+              }}
+            />
+            Investment
+          </label>
         </div>
+        {buckets.length === 0 && (
+          <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
+            Add a bucket to enable expense tracking.
+          </p>
+        )}
       </div>
 
       <div className="form-group">
