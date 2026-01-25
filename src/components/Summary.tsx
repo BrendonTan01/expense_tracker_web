@@ -119,6 +119,40 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
   const [budgetFilter, setBudgetFilter] = useState<'all' | 'monthly' | 'yearly'>('all');
   const [isMobile, setIsMobile] = useState(false);
 
+  // Default visibility settings - only essential sections visible
+  const defaultVisibility = {
+    summaryCards: true,
+    mainChart: true,
+    savingsScore: true,
+    investmentInsights: false,
+    spendingTrends: false,
+    budgetAlerts: true, // Always show alerts if they exist
+    budgetStatus: false,
+    pieChart: false,
+    bucketBreakdown: false,
+    summaryNotes: false,
+  };
+
+  // Load visibility preferences from localStorage
+  const [visibility, setVisibility] = useState(() => {
+    const saved = localStorage.getItem('summaryVisibility');
+    if (saved) {
+      try {
+        return { ...defaultVisibility, ...JSON.parse(saved) };
+      } catch {
+        return defaultVisibility;
+      }
+    }
+    return defaultVisibility;
+  });
+
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Save visibility preferences to localStorage
+  useEffect(() => {
+    localStorage.setItem('summaryVisibility', JSON.stringify(visibility));
+  }, [visibility]);
+
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -127,6 +161,10 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  const toggleVisibility = (key: keyof typeof visibility) => {
+    setVisibility(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const filteredTransactions = useMemo(() => {
     if (useCustomRange && customStartDate && customEndDate) {
@@ -659,8 +697,66 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
             <option value="thisYear">This Year</option>
             <option value="custom">Custom Range</option>
           </select>
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: 'var(--light-bg)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              color: 'var(--text-color)',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <span>⚙️</span>
+            <span>Customize View</span>
+          </button>
         </div>
       </div>
+
+      {/* Visibility Settings Panel */}
+      {showSettings && (
+        <div style={{
+          marginTop: '16px',
+          marginBottom: '16px',
+          padding: '16px',
+          backgroundColor: 'var(--light-bg)',
+          borderRadius: '8px',
+          border: '1px solid var(--border-color)',
+        }}>
+          <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: 'var(--text-color)' }}>
+            Show/Hide Sections
+          </h3>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '12px',
+          }}>
+            {Object.entries(visibility).filter(([key]) => key !== 'budgetAlerts').map(([key, value]) => (
+              <label key={key} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                color: 'var(--text-color)',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={value}
+                  onChange={() => toggleVisibility(key as keyof typeof visibility)}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span>{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim()}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       {(period === 'custom' || useCustomRange) && (
         <div className="date-range-selector">
@@ -699,7 +795,8 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
         </div>
       )}
 
-      <div className="summary-cards">
+      {visibility.summaryCards && (
+        <div className="summary-cards">
         <div className="summary-card card-income">
           <h3>Total Income</h3>
           <p className="summary-amount">{formatCurrency(totals.income)}</p>
@@ -721,8 +818,9 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
           <p className="summary-amount">{totals.savingPercentage.toFixed(1)}%</p>
         </div>
       </div>
+      )}
 
-      {investmentInsights && (
+      {visibility.investmentInsights && investmentInsights && (
         <div className="chart-container">
           <div className="chart-title">Investing Contributions (selected period)</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
@@ -753,7 +851,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
         </div>
       )}
 
-      {chartData.length > 0 && (
+      {visibility.mainChart && chartData.length > 0 && (
         <div className="chart-container">
           <div className="chart-title">
             Income, Expenses & Investments Over Time
@@ -835,8 +933,8 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
         </div>
       )}
 
-      {/* Savings Score */}
-      <div style={{ 
+      {visibility.savingsScore && (
+        <div style={{ 
         marginTop: '32px', 
         padding: '24px', 
         backgroundColor: 'var(--light-bg)', 
@@ -936,8 +1034,9 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
           })}
         </div>
       </div>
+      )}
 
-      {spendingTrends && (
+      {visibility.spendingTrends && spendingTrends && (
         <div className="trends-section" style={{ marginTop: '32px', padding: '20px', backgroundColor: 'var(--light-bg)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
           <h3 style={{ color: 'var(--text-color)' }}>Spending Trends</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginTop: '16px' }}>
@@ -981,8 +1080,8 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
         </div>
       )}
 
-      {/* Budget Alerts */}
-      {budgetStatus.length > 0 && (
+      {/* Budget Alerts - always show if there are alerts */}
+      {budgetStatus.length > 0 && (visibility.budgetAlerts || budgetStatus.some(s => s.isOverBudget || s.percentage >= 80)) && (
         <>
           {budgetStatus.some(s => s.isOverBudget || s.percentage >= 80) && (
             <div style={{
@@ -1040,7 +1139,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
         </>
       )}
 
-      {budgetStatus.length > 0 && (
+      {visibility.budgetStatus && budgetStatus.length > 0 && (
         <div className="budget-status" style={{ marginTop: '32px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ margin: 0 }}>Budget Status</h3>
@@ -1132,7 +1231,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
         </div>
       )}
 
-      {pieChartData.length > 0 && (
+      {visibility.pieChart && pieChartData.length > 0 && (
         <div className="pie-chart-section" style={{ marginTop: '32px' }}>
           <h3>Expenses by Bucket (Pie Chart)</h3>
           <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
@@ -1170,7 +1269,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
         </div>
       )}
 
-      {bucketBreakdown.length > 0 && (
+      {visibility.bucketBreakdown && bucketBreakdown.length > 0 && (
         <div className="bucket-breakdown" style={{ marginTop: '32px' }}>
           <h3>Expenses by Bucket</h3>
           <div className="breakdown-list">
@@ -1208,8 +1307,9 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
         </div>
       )}
 
-      {/* Summary Notes Section */}
-      {(() => {
+      {visibility.summaryNotes && (
+        /* Summary Notes Section */
+        (() => {
         const now = new Date();
         let displayYear: number | null = null;
         let displayMonth: number | null = null;
@@ -1257,7 +1357,8 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
         }
 
         return null;
-      })()}
+      })()
+      )}
     </div>
   );
 }

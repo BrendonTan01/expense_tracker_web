@@ -31,7 +31,10 @@ export default function TransactionList({
   const [filterBucket, setFilterBucket] = useState<string>('all');
   const [filterTag, setFilterTag] = useState<string>('all');
   const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [endDate, setEndDate] = useState(() => {
+    // Default to current system date
+    return new Date().toISOString().split('T')[0];
+  });
   const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
