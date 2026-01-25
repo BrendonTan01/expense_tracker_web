@@ -22,27 +22,55 @@ export default function RecurringTransactionManager({
 }: RecurringTransactionManagerProps) {
   // Calculate status for each recurring transaction
   const recurringStatus = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
+
     return recurringTransactions.map((recurring) => {
       const generatedTransactions = transactions.filter(
         (t) => t.recurringId === recurring.id
       );
-      const isActive = shouldGenerateTransaction(
-        recurring.frequency,
-        recurring.startDate,
-        recurring.endDate,
-        recurring.lastApplied
-      );
+      
+      // Calculate status based on dates
+      const startDate = new Date(recurring.startDate);
+      startDate.setHours(0, 0, 0, 0);
+      const startDateStr = startDate.toISOString().split('T')[0];
+      
+      let status: 'active' | 'inactive' | 'closed' = 'inactive';
+      
+      if (recurring.endDate) {
+        const endDate = new Date(recurring.endDate);
+        endDate.setHours(0, 0, 0, 0);
+        const endDateStr = endDate.toISOString().split('T')[0];
+        
+        if (todayStr >= startDateStr && todayStr <= endDateStr) {
+          status = 'active';
+        } else if (todayStr < startDateStr) {
+          status = 'inactive';
+        } else if (todayStr > endDateStr) {
+          status = 'closed';
+        }
+      } else {
+        // No end date - check if today >= start date
+        if (todayStr >= startDateStr) {
+          status = 'active';
+        } else {
+          status = 'inactive';
+        }
+      }
+      
+      const isActive = status === 'active';
       const nextDate = getNextOccurrence(
         recurring.frequency,
         recurring.startDate,
         recurring.lastApplied
       );
-      const today = new Date().toISOString().split('T')[0];
-      const isOverdue = nextDate < today && isActive;
+      const isOverdue = nextDate < todayStr && isActive;
 
       return {
         recurring,
         generatedCount: generatedTransactions.length,
+        status,
         isActive,
         nextDate,
         isOverdue,
@@ -178,8 +206,14 @@ export default function RecurringTransactionManager({
                   key={recurring.id} 
                   className="recurring-item"
                   style={{
-                    borderLeft: `4px solid ${status.isActive ? (status.isOverdue ? 'var(--danger-color)' : 'var(--success-color)') : 'var(--secondary-color)'}`,
-                    backgroundColor: status.isOverdue ? 'var(--card-bg)' : 'var(--card-bg)',
+                    borderLeft: `4px solid ${
+                      status.status === 'active' 
+                        ? (status.isOverdue ? 'var(--danger-color)' : 'var(--success-color)')
+                        : status.status === 'inactive'
+                        ? 'var(--secondary-color)'
+                        : '#6b7280'
+                    }`,
+                    backgroundColor: 'var(--card-bg)',
                   }}
                 >
                   <div className="recurring-info">
@@ -200,7 +234,19 @@ export default function RecurringTransactionManager({
                             OVERDUE
                           </span>
                         )}
-                        {!status.isActive && (
+                        {status.status === 'active' && !status.isOverdue && (
+                          <span style={{ 
+                            backgroundColor: 'var(--success-color)', 
+                            color: 'white', 
+                            padding: '2px 8px', 
+                            borderRadius: '4px', 
+                            fontSize: '12px',
+                            fontWeight: 600
+                          }}>
+                            ACTIVE
+                          </span>
+                        )}
+                        {status.status === 'inactive' && (
                           <span style={{ 
                             backgroundColor: 'var(--secondary-color)', 
                             color: 'white', 
@@ -212,16 +258,16 @@ export default function RecurringTransactionManager({
                             INACTIVE
                           </span>
                         )}
-                        {status.isActive && !status.isOverdue && (
+                        {status.status === 'closed' && (
                           <span style={{ 
-                            backgroundColor: 'var(--success-color)', 
+                            backgroundColor: '#6b7280', 
                             color: 'white', 
                             padding: '2px 8px', 
                             borderRadius: '4px', 
                             fontSize: '12px',
                             fontWeight: 600
                           }}>
-                            ACTIVE
+                            CLOSED
                           </span>
                         )}
                       </div>
