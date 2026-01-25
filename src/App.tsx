@@ -1,8 +1,8 @@
-import { useState, useEffect, Component, ReactNode, Suspense, lazy } from 'react';
+import { useState, useEffect, useRef, Component, ReactNode, Suspense, lazy } from 'react';
 import { AppState, Transaction, Bucket, RecurringTransaction, Budget, TransactionTemplate } from './types';
 import { generateId } from './utils/storage';
 import { appStateApi, bucketsApi, transactionsApi, recurringApi, budgetsApi } from './utils/api';
-import { shouldGenerateTransaction, getNextOccurrence } from './utils/dateHelpers';
+import { shouldGenerateTransaction, getOccurrenceDatesUpTo } from './utils/dateHelpers';
 import { useAuth } from './contexts/AuthContext';
 import BucketManager from './components/BucketManager';
 import TransactionForm from './components/TransactionForm';
@@ -12,7 +12,6 @@ import Settings from './components/Settings';
 import DataBackup from './components/DataBackup';
 import TransactionTemplates from './components/TransactionTemplates';
 import DarkModeToggle from './components/DarkModeToggle';
-import SpendingGoals from './components/SpendingGoals';
 import EnhancedAnalytics from './components/EnhancedAnalytics';
 
 // Lazy load heavy components to reduce initial bundle size
@@ -67,6 +66,8 @@ function App() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   // Load state from API on mount (only when user is authenticated)
   useEffect(() => {
@@ -94,61 +95,78 @@ function App() {
     loadData();
   }, [user]);
 
-  // Generate transactions from recurring transactions (runs once after initial load)
+  // Trigger recurring generation when tab becomes visible (e.g. user returns next day)
+  const [visibilityTrigger, setVisibilityTrigger] = useState(0);
   useEffect(() => {
-    if (loading) return; // Don't run while loading initial data
-    
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        setVisibilityTrigger((n) => n + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
+  // Generate transactions from recurring transactions (after load, and when user returns to tab)
+  useEffect(() => {
+    if (loading) return;
+
     const generateRecurringTransactions = async () => {
-      const currentState = state; // Capture current state
+      const currentState = stateRef.current;
       const newTransactions: Transaction[] = [];
       const updatedRecurring: RecurringTransaction[] = [];
       const today = new Date().toISOString().split('T')[0];
 
       for (const recurring of currentState.recurringTransactions) {
         if (
-          shouldGenerateTransaction(
+          !shouldGenerateTransaction(
             recurring.frequency,
             recurring.startDate,
             recurring.endDate,
             recurring.lastApplied
           )
         ) {
-          // Calculate the next occurrence date
-          const nextDate = getNextOccurrence(
-            recurring.frequency,
-            recurring.startDate,
-            recurring.lastApplied
-          );
-
-          // Check if transaction already exists for this date and recurring ID
-          const exists = currentState.transactions.some(
-            (t) => t.recurringId === recurring.id && t.date === nextDate
-          );
-
-          if (!exists && nextDate <= today) {
-            newTransactions.push({
-              id: generateId(),
-              ...recurring.transaction,
-              date: nextDate,
-              isRecurring: true,
-              recurringId: recurring.id,
-            });
-          }
-
-          updatedRecurring.push({
-            ...recurring,
-            lastApplied: nextDate,
-          });
-        } else {
           updatedRecurring.push(recurring);
+          continue;
         }
+
+        const occurrenceDates = getOccurrenceDatesUpTo(
+          recurring.frequency,
+          recurring.startDate,
+          recurring.endDate,
+          recurring.lastApplied,
+          today
+        );
+
+        const existingDates = new Set(
+          currentState.transactions
+            .filter((t) => t.recurringId === recurring.id)
+            .map((t) => t.date)
+        );
+
+        let latestGenerated: string | undefined = recurring.lastApplied;
+        for (const date of occurrenceDates) {
+          if (existingDates.has(date)) continue;
+          newTransactions.push({
+            id: generateId(),
+            ...recurring.transaction,
+            date,
+            isRecurring: true,
+            recurringId: recurring.id,
+          });
+          latestGenerated = date;
+        }
+
+        updatedRecurring.push({
+          ...recurring,
+          lastApplied: latestGenerated ?? recurring.lastApplied,
+        });
       }
 
-      // Save new transactions to database
       if (newTransactions.length > 0) {
         try {
           const savedTransactions = await Promise.all(
-            newTransactions.map(t => transactionsApi.create(t))
+            newTransactions.map((t) => transactionsApi.create(t))
           );
           setState((prev) => ({
             ...prev,
@@ -159,12 +177,15 @@ function App() {
         }
       }
 
-      // Update recurring transactions in database
-      if (JSON.stringify(updatedRecurring) !== JSON.stringify(currentState.recurringTransactions)) {
+      const needsUpdate = updatedRecurring.some((r) => {
+        const orig = currentState.recurringTransactions.find((o) => o.id === r.id);
+        return orig && orig.lastApplied !== r.lastApplied;
+      });
+      if (needsUpdate) {
         try {
           await Promise.all(
             updatedRecurring.map(async (r) => {
-              const original = currentState.recurringTransactions.find(or => or.id === r.id);
+              const original = currentState.recurringTransactions.find((o) => o.id === r.id);
               if (original && original.lastApplied !== r.lastApplied) {
                 await recurringApi.update(r.id, { lastApplied: r.lastApplied });
               }
@@ -182,7 +203,7 @@ function App() {
 
     generateRecurringTransactions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]); // Only run when loading changes from true to false
+  }, [loading, visibilityTrigger]);
 
   const handleAddBucket = async (bucket: Bucket) => {
     try {
@@ -580,7 +601,6 @@ function App() {
         {activeTab === 'summary' && (
           <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading summary...</div>}>
             <Summary transactions={state.transactions} buckets={state.buckets} budgets={state.budgets} />
-            <SpendingGoals transactions={state.transactions} buckets={state.buckets} />
             <EnhancedAnalytics transactions={state.transactions} buckets={state.buckets} />
           </Suspense>
         )}

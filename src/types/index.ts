@@ -69,17 +69,6 @@ export interface TransactionTemplate {
   notes?: string;
 }
 
-// Spending Goal
-export interface SpendingGoal {
-  id: string;
-  name: string;
-  targetAmount: number;
-  currentAmount: number;
-  deadline?: string; // ISO format
-  bucketId?: string; // Optional: goal for specific bucket
-  type: 'savings' | 'spending_limit';
-}
-
 // Filter Preset
 export interface FilterPreset {
   id: string;

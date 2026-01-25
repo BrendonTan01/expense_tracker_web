@@ -100,6 +100,38 @@ export function shouldGenerateTransaction(
   return next <= today;
 }
 
+/**
+ * Returns all occurrence dates from start (or first after lastApplied) up to and including upToDate.
+ * Respects endDate if provided; when no endDate, continues indefinitely (recurring never ends).
+ */
+export function getOccurrenceDatesUpTo(
+  frequency: RecurringFrequency,
+  startDate: string,
+  endDate: string | undefined,
+  lastApplied: string | undefined,
+  upToDate: string
+): string[] {
+  const results: string[] = [];
+  let current = lastApplied
+    ? getNextOccurrence(frequency, startDate, lastApplied)
+    : startDate;
+  const upTo = new Date(upToDate);
+  upTo.setHours(23, 59, 59, 999);
+
+  while (true) {
+    const d = new Date(current);
+    if (d > upTo) break;
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(0, 0, 0, 0);
+      if (d > end) break;
+    }
+    results.push(current);
+    current = getNextOccurrence(frequency, startDate, current);
+  }
+  return results;
+}
+
 export function formatDate(dateString: string): string {
   if (!dateString) {
     return 'Invalid date';
