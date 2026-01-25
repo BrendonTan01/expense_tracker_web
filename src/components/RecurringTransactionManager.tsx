@@ -65,7 +65,6 @@ export default function RecurringTransactionManager({
         recurring.startDate,
         recurring.lastApplied
       );
-      const isOverdue = nextDate < todayStr && isActive;
 
       return {
         recurring,
@@ -73,7 +72,6 @@ export default function RecurringTransactionManager({
         status,
         isActive,
         nextDate,
-        isOverdue,
         lastGenerated: generatedTransactions.length > 0
           ? generatedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date
           : null,
@@ -208,7 +206,7 @@ export default function RecurringTransactionManager({
                   style={{
                     borderLeft: `4px solid ${
                       status.status === 'active' 
-                        ? (status.isOverdue ? 'var(--danger-color)' : 'var(--success-color)')
+                        ? 'var(--success-color)'
                         : status.status === 'inactive'
                         ? 'var(--secondary-color)'
                         : '#6b7280'
@@ -222,19 +220,7 @@ export default function RecurringTransactionManager({
                         <span className={`badge badge-${recurring.transaction.type}`}>
                           {recurring.transaction.type}
                         </span>
-                        {status.isOverdue && (
-                          <span style={{ 
-                            backgroundColor: 'var(--danger-color)', 
-                            color: 'white', 
-                            padding: '2px 8px', 
-                            borderRadius: '4px', 
-                            fontSize: '12px',
-                            fontWeight: 600
-                          }}>
-                            OVERDUE
-                          </span>
-                        )}
-                        {status.status === 'active' && !status.isOverdue && (
+                        {status.status === 'active' && (
                           <span style={{ 
                             backgroundColor: 'var(--success-color)', 
                             color: 'white', 
