@@ -163,7 +163,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
   }, []);
 
   const toggleVisibility = (key: keyof typeof visibility) => {
-    setVisibility(prev => ({ ...prev, [key]: !prev[key] }));
+    setVisibility((prev: typeof visibility) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const filteredTransactions = useMemo(() => {
@@ -747,7 +747,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
               }}>
                 <input
                   type="checkbox"
-                  checked={value}
+                  checked={value as boolean}
                   onChange={() => toggleVisibility(key as keyof typeof visibility)}
                   style={{ cursor: 'pointer' }}
                 />
