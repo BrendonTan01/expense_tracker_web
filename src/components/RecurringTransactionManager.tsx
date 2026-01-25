@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { RecurringTransaction, Bucket, RecurringFrequency, Transaction } from '../types';
-import { getNextOccurrence, formatDate, shouldGenerateTransaction } from '../utils/dateHelpers';
+import { getNextOccurrence, formatDate } from '../utils/dateHelpers';
 import TransactionForm from './TransactionForm';
 
 interface RecurringTransactionManagerProps {
