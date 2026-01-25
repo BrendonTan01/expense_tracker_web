@@ -12,7 +12,6 @@ import Settings from './components/Settings';
 import DataBackup from './components/DataBackup';
 import TransactionTemplates from './components/TransactionTemplates';
 import DarkModeToggle from './components/DarkModeToggle';
-import EnhancedAnalytics from './components/EnhancedAnalytics';
 
 // Lazy load heavy components to reduce initial bundle size
 const Summary = lazy(() => import('./components/Summary'));
@@ -601,7 +600,6 @@ function App() {
         {activeTab === 'summary' && (
           <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading summary...</div>}>
             <Summary transactions={state.transactions} buckets={state.buckets} budgets={state.budgets} />
-            <EnhancedAnalytics transactions={state.transactions} buckets={state.buckets} />
           </Suspense>
         )}
 

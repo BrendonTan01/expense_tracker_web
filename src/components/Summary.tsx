@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Transaction, Bucket, Budget } from '../types';
 import { formatCurrency } from '../utils/dateHelpers';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie, LineChart, Line } from 'recharts';
 import SummaryNotes from './SummaryNotes';
+import { calculateSpendingTrends, calculateCategoryAverages, compareCategorySpending } from '../utils/analytics';
 
 interface SummaryProps {
   transactions: Transaction[];
@@ -121,15 +122,29 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
 
   // Default visibility settings - only essential sections visible
   const defaultVisibility = {
+    // Overview Section
     summaryCards: true,
     mainChart: true,
     savingsScore: true,
+    
+    // Category Analysis Section
+    categoryComparison: false,
+    averageSpendingByCategory: false,
+    spendingTrendsChart: false,
+    
+    // Investment Section
     investmentInsights: false,
-    spendingTrends: false,
+    
+    // Budget Section
     budgetAlerts: true, // Always show alerts if they exist
     budgetStatus: false,
+    
+    // Expense Breakdown Section
+    spendingTrends: false,
     pieChart: false,
     bucketBreakdown: false,
+    
+    // Notes Section
     summaryNotes: false,
   };
 
@@ -564,6 +579,34 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
     return { total, average, largest, mostRecent, count: investments.length };
   }, [filteredTransactions]);
 
+  // Category analysis data
+  const categoryAverages = useMemo(() => 
+    calculateCategoryAverages(filteredTransactions, buckets), 
+    [filteredTransactions, buckets]
+  );
+
+  const spendingTrendsChart = useMemo(() => 
+    calculateSpendingTrends(filteredTransactions, 12), 
+    [filteredTransactions]
+  );
+
+  const categoryComparison = useMemo(() => {
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    
+    return compareCategorySpending(
+      transactions, 
+      buckets, 
+      currentMonthStart, 
+      currentMonthEnd, 
+      previousMonthStart, 
+      previousMonthEnd
+    );
+  }, [transactions, buckets]);
+
   // Prepare chart data - group by year
   const chartData = useMemo(() => {
     if (filteredTransactions.length === 0) return [];
@@ -728,32 +771,101 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
           borderRadius: '8px',
           border: '1px solid var(--border-color)',
         }}>
-          <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: 'var(--text-color)' }}>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: 'var(--text-color)' }}>
             Show/Hide Sections
           </h3>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '12px',
-          }}>
-            {Object.entries(visibility).filter(([key]) => key !== 'budgetAlerts').map(([key, value]) => (
-              <label key={key} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                color: 'var(--text-color)',
-              }}>
-                <input
-                  type="checkbox"
-                  checked={value as boolean}
-                  onChange={() => toggleVisibility(key as keyof typeof visibility)}
-                  style={{ cursor: 'pointer' }}
-                />
-                <span>{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim()}</span>
-              </label>
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Overview Section */}
+            <div>
+              <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text-color)' }}>
+                Overview
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+                {(['summaryCards', 'mainChart', 'savingsScore'] as const).map(key => (
+                  <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: 'var(--text-color)' }}>
+                    <input type="checkbox" checked={visibility[key]} onChange={() => toggleVisibility(key)} style={{ cursor: 'pointer' }} />
+                    <span>{key === 'summaryCards' ? 'Summary Cards' : key === 'mainChart' ? 'Income/Expenses Chart' : 'Savings Score'}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Category Analysis Section */}
+            <div>
+              <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text-color)' }}>
+                Category Analysis
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+                {(['categoryComparison', 'averageSpendingByCategory', 'spendingTrendsChart'] as const).map(key => (
+                  <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: 'var(--text-color)' }}>
+                    <input type="checkbox" checked={visibility[key]} onChange={() => toggleVisibility(key)} style={{ cursor: 'pointer' }} />
+                    <span>
+                      {key === 'categoryComparison' ? 'Month-over-Month Comparison' : 
+                       key === 'averageSpendingByCategory' ? 'Average Spending by Category' : 
+                       '12-Month Spending Trends'}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Investment Section */}
+            <div>
+              <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text-color)' }}>
+                Investment
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: 'var(--text-color)' }}>
+                  <input type="checkbox" checked={visibility.investmentInsights} onChange={() => toggleVisibility('investmentInsights')} style={{ cursor: 'pointer' }} />
+                  <span>Investment Insights</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Budget Section */}
+            <div>
+              <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text-color)' }}>
+                Budget
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: 'var(--text-color)' }}>
+                  <input type="checkbox" checked={visibility.budgetStatus} onChange={() => toggleVisibility('budgetStatus')} style={{ cursor: 'pointer' }} />
+                  <span>Budget Status</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Expense Breakdown Section */}
+            <div>
+              <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text-color)' }}>
+                Expense Breakdown
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+                {(['spendingTrends', 'pieChart', 'bucketBreakdown'] as const).map(key => (
+                  <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: 'var(--text-color)' }}>
+                    <input type="checkbox" checked={visibility[key]} onChange={() => toggleVisibility(key)} style={{ cursor: 'pointer' }} />
+                    <span>
+                      {key === 'spendingTrends' ? 'Period Comparison' : 
+                       key === 'pieChart' ? 'Expenses Pie Chart' : 
+                       'Expenses by Bucket List'}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Notes Section */}
+            <div>
+              <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text-color)' }}>
+                Notes
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: 'var(--text-color)' }}>
+                  <input type="checkbox" checked={visibility.summaryNotes} onChange={() => toggleVisibility('summaryNotes')} style={{ cursor: 'pointer' }} />
+                  <span>Summary Notes</span>
+                </label>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -796,28 +908,32 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
       )}
 
       {visibility.summaryCards && (
-        <div className="summary-cards">
-        <div className="summary-card card-income">
-          <h3>Total Income</h3>
-          <p className="summary-amount">{formatCurrency(totals.income)}</p>
+        <div className="summary-cards" style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+          gap: '16px',
+        }}>
+          <div className="summary-card card-income">
+            <h3>Total Income</h3>
+            <p className="summary-amount">{formatCurrency(totals.income)}</p>
+          </div>
+          <div className="summary-card card-expense">
+            <h3>Total Expenses</h3>
+            <p className="summary-amount">{formatCurrency(totals.expenses)}</p>
+          </div>
+          <div className="summary-card" style={{ background: 'linear-gradient(135deg, #c7d2fe 0%, #a5b4fc 100%)', color: '#1e1b4b' }}>
+            <h3>Total Invested</h3>
+            <p className="summary-amount">{formatCurrency(totals.investments)}</p>
+          </div>
+          <div className={`summary-card card-balance ${totals.balance >= 0 ? 'positive' : 'negative'}`}>
+            <h3>Cash After Investing</h3>
+            <p className="summary-amount">{formatCurrency(totals.balance)}</p>
+          </div>
+          <div className={`summary-card card-saving ${totals.savingPercentage >= 0 ? 'positive' : 'negative'}`} style={{ gridColumn: isMobile ? '1' : '1 / -1' }}>
+            <h3>Saving Percentage</h3>
+            <p className="summary-amount">{totals.savingPercentage.toFixed(1)}%</p>
+          </div>
         </div>
-        <div className="summary-card card-expense">
-          <h3>Total Expenses</h3>
-          <p className="summary-amount">{formatCurrency(totals.expenses)}</p>
-        </div>
-        <div className="summary-card" style={{ background: 'linear-gradient(135deg, #c7d2fe 0%, #a5b4fc 100%)', color: '#1e1b4b' }}>
-          <h3>Total Invested</h3>
-          <p className="summary-amount">{formatCurrency(totals.investments)}</p>
-        </div>
-        <div className={`summary-card card-balance ${totals.balance >= 0 ? 'positive' : 'negative'}`}>
-          <h3>Cash After Investing</h3>
-          <p className="summary-amount">{formatCurrency(totals.balance)}</p>
-        </div>
-        <div className={`summary-card card-saving ${totals.savingPercentage >= 0 ? 'positive' : 'negative'}`}>
-          <h3>Saving Percentage</h3>
-          <p className="summary-amount">{totals.savingPercentage.toFixed(1)}%</p>
-        </div>
-      </div>
       )}
 
       {visibility.investmentInsights && investmentInsights && (
@@ -930,6 +1046,104 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </div>
+      )}
+
+      {/* Category Analysis Section */}
+      {visibility.categoryComparison && categoryComparison.length > 0 && (
+        <div style={{
+          marginTop: '32px',
+          padding: '20px',
+          background: 'var(--light-bg)',
+          borderRadius: '8px',
+          border: '1px solid var(--border-color)'
+        }}>
+          <h3 style={{ marginBottom: '16px', color: 'var(--text-color)' }}>Month-over-Month Category Comparison</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {categoryComparison.map(cat => (
+              <div key={cat.bucketId} style={{
+                padding: '12px',
+                background: 'var(--card-bg)',
+                borderRadius: '6px',
+                border: '1px solid var(--border-color)'
+              }}>
+                <div style={{ fontWeight: 500, marginBottom: '8px', color: 'var(--text-color)' }}>{cat.bucketName}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '4px', color: 'var(--text-color)' }}>
+                  <span>This Month: {formatCurrency(cat.currentPeriod)}</span>
+                  <span>Last Month: {formatCurrency(cat.previousPeriod)}</span>
+                </div>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: cat.changeAmount >= 0 ? 'var(--danger-color)' : 'var(--success-color)'
+                }}>
+                  {cat.changeAmount >= 0 ? '+' : ''}{cat.change.toFixed(1)}% ({cat.changeAmount >= 0 ? '+' : ''}{formatCurrency(cat.changeAmount)})
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {visibility.averageSpendingByCategory && categoryAverages.length > 0 && (
+        <div style={{
+          marginTop: '32px',
+          padding: '20px',
+          background: 'var(--light-bg)',
+          borderRadius: '8px',
+          border: '1px solid var(--border-color)'
+        }}>
+          <h3 style={{ marginBottom: '16px', color: 'var(--text-color)' }}>Average Spending by Category</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {categoryAverages.map(cat => (
+              <div key={cat.bucketId} style={{
+                padding: '12px',
+                background: 'var(--card-bg)',
+                borderRadius: '6px',
+                border: '1px solid var(--border-color)'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: 500, color: 'var(--text-color)' }}>{cat.bucketName}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      {cat.count} transactions
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 600, color: 'var(--text-color)' }}>{formatCurrency(cat.average)}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      Total: {formatCurrency(cat.total)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {visibility.spendingTrendsChart && spendingTrendsChart.length > 0 && (
+        <div style={{
+          marginTop: '32px',
+          padding: '20px',
+          background: 'var(--light-bg)',
+          borderRadius: '8px',
+          border: '1px solid var(--border-color)'
+        }}>
+          <h3 style={{ marginBottom: '16px', color: 'var(--text-color)' }}>12-Month Spending Trends</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={spendingTrendsChart}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+              <XAxis dataKey="period" stroke="var(--text-muted)" tick={{ fill: 'var(--text-color)' }} />
+              <YAxis stroke="var(--text-muted)" tick={{ fill: 'var(--text-color)' }} />
+              <Tooltip formatter={(value: number | undefined) => value !== undefined ? formatCurrency(value) : ''} />
+              <Legend />
+              <Line type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} name="Income" />
+              <Line type="monotone" dataKey="expenses" stroke="#ef4444" strokeWidth={2} name="Expenses" />
+              <Line type="monotone" dataKey="investments" stroke="#8b5cf6" strokeWidth={2} name="Investments" />
+              <Line type="monotone" dataKey="balance" stroke="#6366f1" strokeWidth={2} name="Balance (net)" />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       )}
 
