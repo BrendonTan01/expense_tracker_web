@@ -15,6 +15,45 @@
   font-size: 16px;
 }
 
+.settings-section {
+  padding: 20px;
+  background: var(--card-bg);
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  margin-top: 24px;
+}
+
+.settings-section-title {
+  margin: 0 0 12px 0;
+  color: var(--text-color);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.theme-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.theme-setting-title {
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.theme-setting-subtitle {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.theme-setting-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .settings-options {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -81,6 +120,10 @@
 /* Mobile responsive */
 @media (max-width: 768px) {
   .settings-page {
+    padding: 16px;
+  }
+
+  .settings-section {
     padding: 16px;
   }
 

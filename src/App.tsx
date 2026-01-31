@@ -11,7 +11,6 @@ import Login from './components/Login';
 import Settings from './components/Settings';
 import DataBackup from './components/DataBackup';
 import TransactionTemplates from './components/TransactionTemplates';
-import DarkModeToggle from './components/DarkModeToggle';
 
 // Lazy load heavy components to reduce initial bundle size
 const Summary = lazy(() => import('./components/Summary'));
@@ -553,7 +552,6 @@ function App() {
         <div className="app-header-top">
           <h1>Expense Tracker</h1>
           <div className="app-header-user-info">
-            <DarkModeToggle />
             <span className="user-email">{user.email}</span>
             <button
               onClick={logout}

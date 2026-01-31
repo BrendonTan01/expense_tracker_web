@@ -1,4 +1,5 @@
 import './Settings.css';
+import DarkModeToggle from './DarkModeToggle';
 
 interface SettingsProps {
   activeSubTab: 'buckets' | 'recurring' | 'budgets';
@@ -10,6 +11,12 @@ export default function Settings({ activeSubTab, onNavigate }: SettingsProps) {
     <div className="settings-page">
       <h2>Settings</h2>
       <p className="settings-description">Choose a category to manage:</p>
+
+      <div className="settings-section">
+        <h3 className="settings-section-title">Appearance</h3>
+        <DarkModeToggle />
+      </div>
+
       <div className="settings-options">
         <button
           className={`settings-option ${activeSubTab === 'buckets' ? 'active' : ''}`}

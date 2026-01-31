@@ -1,33 +1,42 @@
-import { useState, useEffect } from 'react';
-import { saveToLocalStorage, loadFromLocalStorage } from '../utils/storage';
-
-const THEME_STORAGE_KEY = 'theme_preference';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function DarkModeToggle() {
-  const [isDark, setIsDark] = useState(() => {
-    const saved = loadFromLocalStorage<string>(THEME_STORAGE_KEY, 'light');
-    return saved === 'dark';
-  });
-
-  useEffect(() => {
-    // Apply theme to document
-    if (isDark) {
-      document.documentElement.classList.add('dark-mode');
-      saveToLocalStorage(THEME_STORAGE_KEY, 'dark');
-    } else {
-      document.documentElement.classList.remove('dark-mode');
-      saveToLocalStorage(THEME_STORAGE_KEY, 'light');
-    }
-  }, [isDark]);
+  const { preference, resolvedTheme, setPreference } = useTheme();
 
   return (
-    <button
-      onClick={() => setIsDark(!isDark)}
-      className="btn btn-secondary"
-      style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-    >
-      {isDark ? '☀️' : '🌙'} {isDark ? 'Light Mode' : 'Dark Mode'}
-    </button>
+    <div className="theme-setting">
+      <div className="theme-setting-header">
+        <div>
+          <div className="theme-setting-title">Colour tone</div>
+          <div className="theme-setting-subtitle">
+            Set to System to follow your device ({resolvedTheme === 'dark' ? 'Dark' : 'Light'} right now).
+          </div>
+        </div>
+      </div>
+
+      <div className="theme-setting-controls" role="group" aria-label="Colour tone">
+        <button
+          type="button"
+          className={`btn btn-sm ${preference === 'system' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setPreference('system')}
+        >
+          System
+        </button>
+        <button
+          type="button"
+          className={`btn btn-sm ${preference === 'light' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setPreference('light')}
+        >
+          Light
+        </button>
+        <button
+          type="button"
+          className={`btn btn-sm ${preference === 'dark' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setPreference('dark')}
+        >
+          Dark
+        </button>
+      </div>
+    </div>
   );
 }
