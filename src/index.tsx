@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import { AuthProvider } from './contexts/AuthContext'
 import './index.css'
+import { registerSW } from 'virtual:pwa-register'
 
 // Root-level error boundary wrapper
 class RootErrorBoundary extends React.Component<
@@ -79,3 +80,17 @@ ReactDOM.createRoot(rootElement).render(
     </RootErrorBoundary>
   </React.StrictMode>,
 )
+
+// Register the PWA service worker (enables install + faster repeat loads).
+const updateSW = registerSW({
+  onNeedRefresh() {
+    const shouldReload = window.confirm(
+      'A new version of Expense Tracker is available. Reload to update?'
+    )
+    if (shouldReload) updateSW(true)
+  },
+  onOfflineReady() {
+    // App shell is cached and ready for offline/poor-network use.
+    // Intentionally quiet (no toast) to avoid interrupting users.
+  },
+})
