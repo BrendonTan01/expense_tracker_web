@@ -79,35 +79,66 @@ router.post('/', (req, res) => {
 // PUT update a recurring transaction (must belong to user)
 router.put('/:id', (req, res) => {
   try {
-    const { transaction, frequency, startDate, endDate, lastApplied } = req.body;
-    
-    if (!transaction || !frequency || !startDate) {
-      return res.status(400).json({ error: 'transaction, frequency, and startDate are required' });
+    const body = req.body || {};
+    const { transaction, frequency, startDate, endDate, lastApplied } = body;
+
+    const setParts = [];
+    const params = [];
+
+    if (transaction !== undefined) {
+      if (!transaction || typeof transaction !== 'object') {
+        return res.status(400).json({ error: 'transaction must be an object when provided' });
+      }
+      if (!['expense', 'income', 'investment'].includes(transaction.type)) {
+        return res.status(400).json({ error: 'transaction.type must be either "expense", "income", or "investment"' });
+      }
+      setParts.push('type = ?', 'amount = ?', 'description = ?', 'bucketId = ?');
+      params.push(
+        transaction.type,
+        transaction.amount,
+        transaction.description,
+        transaction.bucketId || null
+      );
     }
-    
-    if (!['daily', 'weekly', 'fortnightly', 'monthly', 'yearly'].includes(frequency)) {
-      return res.status(400).json({ error: 'frequency must be daily, weekly, fortnightly, monthly, or yearly' });
+
+    if (frequency !== undefined) {
+      if (!['daily', 'weekly', 'fortnightly', 'monthly', 'yearly'].includes(frequency)) {
+        return res.status(400).json({ error: 'frequency must be daily, weekly, fortnightly, monthly, or yearly' });
+      }
+      setParts.push('frequency = ?');
+      params.push(frequency);
     }
-    
-    if (!['expense', 'income', 'investment'].includes(transaction.type)) {
-      return res.status(400).json({ error: 'transaction.type must be either "expense", "income", or "investment"' });
+
+    if (startDate !== undefined) {
+      if (!startDate) {
+        return res.status(400).json({ error: 'startDate cannot be empty when provided' });
+      }
+      setParts.push('startDate = ?');
+      params.push(startDate);
     }
-    
+
+    if (Object.prototype.hasOwnProperty.call(body, 'endDate')) {
+      setParts.push('endDate = ?');
+      params.push(endDate || null);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'lastApplied')) {
+      setParts.push('lastApplied = ?');
+      params.push(lastApplied || null);
+    }
+
+    if (setParts.length === 0) {
+      return res.status(400).json({ error: 'No valid fields provided for update' });
+    }
+
     const stmt = db.prepare(`
-      UPDATE recurring_transactions 
-      SET type = ?, amount = ?, description = ?, bucketId = ?, frequency = ?, startDate = ?, endDate = ?, lastApplied = ?
+      UPDATE recurring_transactions
+      SET ${setParts.join(', ')}
       WHERE id = ? AND user_id = ?
     `);
-    
+
     const result = stmt.run(
-      transaction.type,
-      transaction.amount,
-      transaction.description,
-      transaction.bucketId || null,
-      frequency,
-      startDate,
-      endDate || null,
-      lastApplied || null,
+      ...params,
       req.params.id,
       req.userId
     );

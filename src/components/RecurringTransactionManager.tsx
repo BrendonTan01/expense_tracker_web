@@ -8,7 +8,11 @@ interface RecurringTransactionManagerProps {
   buckets: Bucket[];
   transactions: Transaction[];
   onAdd: (recurring: RecurringTransaction) => void;
-  onUpdate: (id: string, recurring: Partial<RecurringTransaction>) => void;
+  onUpdate: (
+    id: string,
+    recurring: Partial<RecurringTransaction>,
+    options?: { applyToGenerated?: 'all' | 'fromNext' }
+  ) => void;
   onDelete: (id: string) => void;
 }
 
@@ -85,16 +89,22 @@ export default function RecurringTransactionManager({
   const [frequency, setFrequency] = useState<RecurringFrequency>('monthly');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState('');
+  const [pendingEditUpdate, setPendingEditUpdate] = useState<{
+    id: string;
+    updates: Partial<RecurringTransaction>;
+  } | null>(null);
 
   const handleSubmit = (transactionData: Omit<Transaction, 'id' | 'isRecurring' | 'recurringId' | 'date'>) => {
     if (editingId) {
-      onUpdate(editingId, {
-        transaction: transactionData,
-        frequency,
-        startDate,
-        endDate: endDate || undefined,
+      setPendingEditUpdate({
+        id: editingId,
+        updates: {
+          transaction: transactionData,
+          frequency,
+          startDate,
+          endDate: endDate || undefined,
+        },
       });
-      setEditingId(null);
     } else {
       onAdd({
         id: Date.now().toString(),
@@ -112,18 +122,32 @@ export default function RecurringTransactionManager({
     setEndDate('');
   };
 
+  const applyPendingUpdate = (mode: 'all' | 'fromNext') => {
+    if (!pendingEditUpdate) return;
+    onUpdate(pendingEditUpdate.id, pendingEditUpdate.updates, { applyToGenerated: mode });
+    setPendingEditUpdate(null);
+    setEditingId(null);
+    setShowForm(false);
+    setFormData({});
+    setFrequency('monthly');
+    setStartDate(new Date().toISOString().split('T')[0]);
+    setEndDate('');
+  };
+
   const handleEdit = (recurring: RecurringTransaction) => {
     setEditingId(recurring.id);
     setFormData(recurring.transaction);
     setFrequency(recurring.frequency);
     setStartDate(recurring.startDate ? recurring.startDate.split('T')[0] : new Date().toISOString().split('T')[0]);
     setEndDate(recurring.endDate ? recurring.endDate.split('T')[0] : '');
+    setPendingEditUpdate(null);
     setShowForm(true);
   };
 
   const handleCancel = () => {
     setShowForm(false);
     setEditingId(null);
+    setPendingEditUpdate(null);
     setFormData({});
     setFrequency('monthly');
     setStartDate(new Date().toISOString().split('T')[0]);
@@ -183,6 +207,63 @@ export default function RecurringTransactionManager({
                 onChange={(e) => setEndDate(e.target.value)}
                 className="input"
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingEditUpdate && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            zIndex: 1000,
+          }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            style={{
+              background: 'var(--card-bg)',
+              color: 'var(--text-color)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 12,
+              maxWidth: 520,
+              width: '100%',
+              padding: '1rem',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
+            }}
+          >
+            <h3 style={{ marginTop: 0 }}>Apply changes to generated transactions?</h3>
+            <p style={{ marginTop: 0, color: 'var(--text-muted)' }}>
+              You changed this recurring template. Choose whether to update transactions that were already generated.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setPendingEditUpdate(null)}
+              >
+                Back
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => applyPendingUpdate('fromNext')}
+                title="Keep past transactions unchanged"
+              >
+                Only from next onwards
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => applyPendingUpdate('all')}
+                title="Update all transactions already generated for this recurring item"
+              >
+                Update all generated
+              </button>
             </div>
           </div>
         </div>

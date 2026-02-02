@@ -191,6 +191,35 @@ export const transactionsApi = {
     });
     return handleResponse<void>(response);
   },
+
+  updateByRecurringId: async (
+    recurringId: string,
+    transaction: { type: Transaction['type']; amount: number; description: string; bucketId?: string },
+    options?: { fromDate?: string }
+  ): Promise<{ updated: number; transactions: Transaction[] }> => {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/transactions/recurring/${recurringId}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        transaction,
+        ...(options?.fromDate ? { fromDate: options.fromDate } : {}),
+      }),
+    }).catch((err) => {
+      throw new Error(`Failed to bulk update recurring transactions: ${err.message}`);
+    });
+    const result = await handleResponse<{ updated: number; transactions: any[] }>(response);
+    return {
+      updated: Number(result.updated) || 0,
+      transactions: (result.transactions || []).map((t) => ({
+        ...t,
+        isRecurring: Boolean(t.isRecurring),
+        bucketId: t.bucketId || undefined,
+        recurringId: t.recurringId || undefined,
+        tags: t.tags ? (typeof t.tags === 'string' ? JSON.parse(t.tags) : t.tags) : undefined,
+        notes: t.notes || undefined,
+      })),
+    };
+  },
 };
 
 // Recurring Transactions API

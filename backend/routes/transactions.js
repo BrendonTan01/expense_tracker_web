@@ -8,6 +8,82 @@ const db = getDatabase();
 // All routes require authentication
 router.use(authenticateToken);
 
+// PUT bulk update transactions for a recurringId (must belong to user)
+// Supports updating all generated transactions, or only those from a cutoff date onwards.
+router.put('/recurring/:recurringId', (req, res) => {
+  try {
+    const { recurringId } = req.params;
+    const { transaction, fromDate } = req.body || {};
+
+    if (!recurringId) {
+      return res.status(400).json({ error: 'recurringId is required' });
+    }
+
+    if (!transaction || typeof transaction !== 'object') {
+      return res.status(400).json({ error: 'transaction is required' });
+    }
+
+    if (!['expense', 'income', 'investment'].includes(transaction.type)) {
+      return res.status(400).json({ error: 'transaction.type must be either "expense", "income", or "investment"' });
+    }
+
+    if (transaction.amount === undefined || transaction.amount === null || Number.isNaN(Number(transaction.amount))) {
+      return res.status(400).json({ error: 'transaction.amount must be a number' });
+    }
+
+    if (typeof transaction.description !== 'string' || transaction.description.length === 0) {
+      return res.status(400).json({ error: 'transaction.description must be a non-empty string' });
+    }
+
+    let cutoff = null;
+    if (fromDate !== undefined && fromDate !== null) {
+      cutoff = String(fromDate).split('T')[0];
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(cutoff)) {
+        return res.status(400).json({ error: 'fromDate must be an ISO date (YYYY-MM-DD)' });
+      }
+    }
+
+    let updateSql = `
+      UPDATE transactions
+      SET type = ?, amount = ?, description = ?, bucketId = ?
+      WHERE user_id = ? AND recurringId = ?
+    `;
+    const updateParams = [
+      transaction.type,
+      Number(transaction.amount),
+      transaction.description,
+      transaction.bucketId || null,
+      req.userId,
+      recurringId,
+    ];
+
+    if (cutoff) {
+      updateSql += ' AND date >= ?';
+      updateParams.push(cutoff);
+    }
+
+    db.prepare(updateSql).run(...updateParams);
+
+    let selectSql = 'SELECT * FROM transactions WHERE user_id = ? AND recurringId = ?';
+    const selectParams = [req.userId, recurringId];
+    if (cutoff) {
+      selectSql += ' AND date >= ?';
+      selectParams.push(cutoff);
+    }
+    selectSql += ' ORDER BY date DESC, id DESC';
+
+    const updatedRows = db.prepare(selectSql).all(...selectParams);
+    const parsed = updatedRows.map((t) => ({
+      ...t,
+      tags: t.tags ? JSON.parse(t.tags) : null,
+    }));
+
+    return res.status(200).json({ updated: parsed.length, transactions: parsed });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 // GET all transactions for the authenticated user
 router.get('/', (req, res) => {
   try {

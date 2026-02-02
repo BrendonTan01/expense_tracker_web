@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, Component, ReactNode, Suspense, lazy } fro
 import { AppState, Transaction, Bucket, RecurringTransaction, Budget, TransactionTemplate } from './types';
 import { generateId } from './utils/storage';
 import { appStateApi, bucketsApi, transactionsApi, recurringApi, budgetsApi } from './utils/api';
-import { shouldGenerateTransaction, getOccurrenceDatesUpTo } from './utils/dateHelpers';
+import { shouldGenerateTransaction, getOccurrenceDatesUpTo, getNextOccurrence } from './utils/dateHelpers';
 import { useAuth } from './contexts/AuthContext';
 import BucketManager from './components/BucketManager';
 import TransactionForm from './components/TransactionForm';
@@ -454,15 +454,76 @@ function App() {
     }
   };
 
-  const handleUpdateRecurring = async (id: string, updates: Partial<RecurringTransaction>) => {
+  const handleUpdateRecurring = async (
+    id: string,
+    updates: Partial<RecurringTransaction>,
+    options?: { applyToGenerated?: 'all' | 'fromNext' }
+  ) => {
     try {
       const updatedRecurring = await recurringApi.update(id, updates);
-      setState((prev) => ({
-        ...prev,
-        recurringTransactions: prev.recurringTransactions.map((r) =>
-          r.id === id ? updatedRecurring : r
-        ),
-      }));
+
+      let bulkUpdatedTransactions: Transaction[] | undefined;
+      if (options?.applyToGenerated) {
+        const today = new Date().toISOString().split('T')[0];
+        const normalizeIsoDate = (value: string | undefined): string | undefined => {
+          if (!value) return undefined;
+          const d = String(value).split('T')[0];
+          return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined;
+        };
+
+        const current = stateRef.current;
+        const existingDatesArr = current.transactions
+          .filter((t) => t.recurringId === id)
+          .map((t) => normalizeIsoDate(t.date))
+          .filter((d): d is string => Boolean(d));
+
+        const existingUpToTodaySorted = existingDatesArr
+          .filter((d) => d <= today)
+          .sort();
+        const latestExistingUpToToday =
+          existingUpToTodaySorted.length > 0
+            ? existingUpToTodaySorted[existingUpToTodaySorted.length - 1]
+            : undefined;
+
+        const effectiveLastApplied =
+          latestExistingUpToToday || normalizeIsoDate(updatedRecurring.lastApplied);
+
+        const nextDate =
+          effectiveLastApplied
+            ? getNextOccurrence(updatedRecurring.frequency, updatedRecurring.startDate, effectiveLastApplied)
+            : normalizeIsoDate(updatedRecurring.startDate) || today;
+
+        const fromDate = options.applyToGenerated === 'fromNext' ? nextDate : undefined;
+
+        const bulkResult = await transactionsApi.updateByRecurringId(
+          id,
+          {
+            type: updatedRecurring.transaction.type,
+            amount: updatedRecurring.transaction.amount,
+            description: updatedRecurring.transaction.description,
+            bucketId: updatedRecurring.transaction.bucketId,
+          },
+          fromDate ? { fromDate } : undefined
+        );
+
+        bulkUpdatedTransactions = bulkResult.transactions;
+      }
+
+      setState((prev) => {
+        const updatedById = bulkUpdatedTransactions
+          ? new Map(bulkUpdatedTransactions.map((t) => [t.id, t]))
+          : null;
+
+        return {
+          ...prev,
+          recurringTransactions: prev.recurringTransactions.map((r) =>
+            r.id === id ? updatedRecurring : r
+          ),
+          transactions: updatedById
+            ? prev.transactions.map((t) => updatedById.get(t.id) ?? t)
+            : prev.transactions,
+        };
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update recurring transaction');
       console.error('Failed to update recurring transaction:', err);
