@@ -18,6 +18,43 @@ type CalendarItem =
       frequency: RecurringTransaction['frequency'];
     };
 
+type DayTypePresence = {
+  expense: boolean;
+  income: boolean;
+  investment: boolean;
+};
+
+function dayTypePresence(items: CalendarItem[]): DayTypePresence {
+  const out: DayTypePresence = { expense: false, income: false, investment: false };
+  for (const item of items) {
+    const tType = item.transaction.type;
+    if (tType === 'expense') out.expense = true;
+    else if (tType === 'income') out.income = true;
+    else if (tType === 'investment') out.investment = true;
+  }
+  return out;
+}
+
+function DayTypeMarkers(props: { items: CalendarItem[]; className?: string }) {
+  const { items, className } = props;
+  const presence = dayTypePresence(items);
+  const any = presence.expense || presence.income || presence.investment;
+  if (!any) return null;
+
+  const labelParts: string[] = [];
+  if (presence.expense) labelParts.push('expense');
+  if (presence.income) labelParts.push('income');
+  if (presence.investment) labelParts.push('investment');
+
+  return (
+    <div className={['calendar-markers', className || ''].join(' ')} aria-label={`Transactions: ${labelParts.join(', ')}`}>
+      {presence.expense && <span className="calendar-marker calendar-marker--expense" />}
+      {presence.income && <span className="calendar-marker calendar-marker--income" />}
+      {presence.investment && <span className="calendar-marker calendar-marker--investment" />}
+    </div>
+  );
+}
+
 function clampIsoDate(value: string | undefined, fallback: string): string {
   return normalizeIsoDate(value) || fallback;
 }
@@ -183,7 +220,6 @@ function MonthGrid(props: {
           if (!iso) return <div key={`empty-${idx}`} className="calendar-cell calendar-cell--empty" />;
           const items = itemsByDate.get(iso) || [];
           const posted = items.filter((i) => i.kind === 'posted');
-          const scheduled = items.filter((i) => i.kind === 'scheduled');
           const expenseTotal = posted
             .filter((i) => i.kind === 'posted' && i.transaction.type === 'expense')
             .reduce((s, i) => s + (i.kind === 'posted' ? i.transaction.amount : 0), 0);
@@ -209,8 +245,7 @@ function MonthGrid(props: {
                 {expenseTotal > 0 && <span className="calendar-mini">{formatCurrency(expenseTotal)}</span>}
               </div>
               <div className="calendar-cell-bottom">
-                {posted.length > 0 && <span className="calendar-pill calendar-pill--posted">{posted.length} posted</span>}
-                {scheduled.length > 0 && <span className="calendar-pill calendar-pill--scheduled">{scheduled.length} scheduled</span>}
+                <DayTypeMarkers items={items} />
               </div>
             </button>
           );
@@ -234,18 +269,11 @@ function YearGrid(props: {
         const start = startOfMonthIsoLocal(mIso);
         const end = endOfMonthIsoLocal(mIso);
         const days = enumerateIsoDaysInclusive(start, end);
-        let postedCount = 0;
-        let scheduledCount = 0;
         let monthExpenses = 0;
         for (const dayIso of days) {
           const items = props.itemsByDate.get(dayIso) || [];
           for (const item of items) {
-            if (item.kind === 'posted') {
-              postedCount += 1;
-              if (item.transaction.type === 'expense') monthExpenses += item.transaction.amount;
-            } else {
-              scheduledCount += 1;
-            }
+            if (item.kind === 'posted' && item.transaction.type === 'expense') monthExpenses += item.transaction.amount;
           }
         }
 
@@ -297,11 +325,6 @@ function YearGrid(props: {
                   </button>
                 );
               })}
-            </div>
-
-            <div className="calendar-year-month-meta">
-              <span className="calendar-pill calendar-pill--posted">{postedCount} posted</span>
-              <span className="calendar-pill calendar-pill--scheduled">{scheduledCount} scheduled</span>
             </div>
           </div>
         );
@@ -670,7 +693,9 @@ export default function CalendarView(props: {
           </div>
           <div className="calendar-nav">
             <button
-              className="btn btn-sm btn-secondary"
+              className="btn btn-sm btn-secondary calendar-nav-icon"
+              aria-label={`Previous ${mode}`}
+              title={`Previous ${mode}`}
               onClick={() => {
                 const nextAnchor = shiftAnchor(mode, anchorIso, -1);
                 setAnchorIso(nextAnchor);
@@ -680,20 +705,24 @@ export default function CalendarView(props: {
                 }
               }}
             >
-              Prev
+              ←
             </button>
             <button
-              className="btn btn-sm btn-secondary"
+              className="btn btn-sm btn-secondary calendar-nav-icon"
+              aria-label="Today"
+              title="Today"
               onClick={() => {
                 const t = todayIsoLocal();
                 setAnchorIso(t);
                 setSelectedIso(t);
               }}
             >
-              Today
+              ●
             </button>
             <button
-              className="btn btn-sm btn-secondary"
+              className="btn btn-sm btn-secondary calendar-nav-icon"
+              aria-label={`Next ${mode}`}
+              title={`Next ${mode}`}
               onClick={() => {
                 const nextAnchor = shiftAnchor(mode, anchorIso, 1);
                 setAnchorIso(nextAnchor);
@@ -703,7 +732,7 @@ export default function CalendarView(props: {
                 }
               }}
             >
-              Next
+              →
             </button>
           </div>
         </div>
@@ -838,12 +867,7 @@ export default function CalendarView(props: {
                         </div>
                       )}
                       <div className="calendar-week-day-bottom">
-                        {posted.length > 0 && <span className="calendar-pill calendar-pill--posted">{posted.length} posted</span>}
-                        {items.some((i) => i.kind === 'scheduled') && (
-                          <span className="calendar-pill calendar-pill--scheduled">
-                            {items.filter((i) => i.kind === 'scheduled').length} scheduled
-                          </span>
-                        )}
+                        <DayTypeMarkers items={items} />
                       </div>
                     </button>
                   );

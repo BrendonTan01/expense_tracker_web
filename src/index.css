@@ -1228,6 +1228,15 @@ td {
   gap: 8px;
 }
 
+.calendar-nav-icon {
+  min-width: 36px;
+  justify-content: center;
+  line-height: 1;
+  font-weight: 800;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
 .calendar-filters {
   padding: 12px;
   background: var(--light-bg);
@@ -1490,23 +1499,61 @@ td {
   justify-content: space-between;
   gap: 8px;
   align-items: baseline;
+  min-width: 0;
 }
 
 .calendar-day {
   font-weight: 800;
   color: var(--text-color);
+  flex: 0 0 auto;
 }
 
 .calendar-mini {
   font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  text-align: right;
 }
 
 .calendar-cell-bottom {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  align-items: center;
+}
+
+.calendar-markers {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.calendar-marker {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  flex: 0 0 auto;
+}
+
+.calendar-marker--expense {
+  background: var(--danger-color);
+  border-color: rgba(239, 68, 68, 0.55);
+}
+
+.calendar-marker--income {
+  background: var(--success-color);
+  border-color: rgba(16, 185, 129, 0.55);
+}
+
+.calendar-marker--investment {
+  background: #7c3aed;
+  border-color: rgba(124, 58, 237, 0.55);
 }
 
 .calendar-pill {
