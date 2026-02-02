@@ -1,26 +1,151 @@
 import { RecurringFrequency } from '../types';
 
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function isIsoDate(value: string | undefined | null): value is string {
+  return typeof value === 'string' && ISO_DATE_RE.test(value);
+}
+
+/**
+ * Normalize any date-like string to `YYYY-MM-DD` when possible.
+ * - Accepts `YYYY-MM-DD` or ISO timestamps like `YYYY-MM-DDTHH:mm:ss...`
+ */
+export function normalizeIsoDate(value: string | undefined | null): string | undefined {
+  if (!value) return undefined;
+  const s = String(value);
+  const d = s.split('T')[0];
+  return isIsoDate(d) ? d : undefined;
+}
+
+/**
+ * Parse `YYYY-MM-DD` as a **local** Date at midnight.
+ * Avoids the JS pitfall where `new Date('YYYY-MM-DD')` is treated as UTC.
+ */
+export function parseIsoDateLocal(isoDate: string): Date {
+  const d = normalizeIsoDate(isoDate);
+  if (!d) return new Date(NaN);
+  const [y, m, day] = d.split('-').map(Number);
+  return new Date(y, m - 1, day, 0, 0, 0, 0);
+}
+
+export function formatIsoDateLocal(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function todayIsoLocal(): string {
+  return formatIsoDateLocal(new Date());
+}
+
+export function compareIsoDates(a: string, b: string): number {
+  // ISO `YYYY-MM-DD` sorts lexicographically
+  return a.localeCompare(b);
+}
+
+export function maxIsoDate(...values: Array<string | undefined>): string | undefined {
+  let max: string | undefined;
+  for (const v of values) {
+    const d = normalizeIsoDate(v);
+    if (!d) continue;
+    if (!max || d > max) max = d;
+  }
+  return max;
+}
+
+export function minIsoDate(...values: Array<string | undefined>): string | undefined {
+  let min: string | undefined;
+  for (const v of values) {
+    const d = normalizeIsoDate(v);
+    if (!d) continue;
+    if (!min || d < min) min = d;
+  }
+  return min;
+}
+
+export function addDaysIsoLocal(isoDate: string, days: number): string {
+  const base = parseIsoDateLocal(isoDate);
+  if (isNaN(base.getTime())) return todayIsoLocal();
+  base.setDate(base.getDate() + days);
+  return formatIsoDateLocal(base);
+}
+
+export function startOfMonthIsoLocal(isoDate: string): string {
+  const d = parseIsoDateLocal(isoDate);
+  if (isNaN(d.getTime())) return todayIsoLocal();
+  return formatIsoDateLocal(new Date(d.getFullYear(), d.getMonth(), 1));
+}
+
+export function endOfMonthIsoLocal(isoDate: string): string {
+  const d = parseIsoDateLocal(isoDate);
+  if (isNaN(d.getTime())) return todayIsoLocal();
+  return formatIsoDateLocal(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+}
+
+export function startOfYearIsoLocal(isoDate: string): string {
+  const d = parseIsoDateLocal(isoDate);
+  if (isNaN(d.getTime())) return todayIsoLocal();
+  return formatIsoDateLocal(new Date(d.getFullYear(), 0, 1));
+}
+
+export function endOfYearIsoLocal(isoDate: string): string {
+  const d = parseIsoDateLocal(isoDate);
+  if (isNaN(d.getTime())) return todayIsoLocal();
+  return formatIsoDateLocal(new Date(d.getFullYear(), 11, 31));
+}
+
+export function startOfWeekIsoLocal(isoDate: string, weekStartsOn: 0 | 1 = 1): string {
+  const d = parseIsoDateLocal(isoDate);
+  if (isNaN(d.getTime())) return todayIsoLocal();
+  const dow = d.getDay(); // 0 Sun ... 6 Sat
+  const diff = (dow - weekStartsOn + 7) % 7;
+  d.setDate(d.getDate() - diff);
+  return formatIsoDateLocal(d);
+}
+
+export function endOfWeekIsoLocal(isoDate: string, weekStartsOn: 0 | 1 = 1): string {
+  const start = startOfWeekIsoLocal(isoDate, weekStartsOn);
+  return addDaysIsoLocal(start, 6);
+}
+
+export function enumerateIsoDaysInclusive(startIso: string, endIso: string): string[] {
+  const start = normalizeIsoDate(startIso);
+  const end = normalizeIsoDate(endIso);
+  if (!start || !end) return [];
+  if (start > end) return [];
+  const out: string[] = [];
+  let cur = start;
+  while (cur <= end) {
+    out.push(cur);
+    const next = addDaysIsoLocal(cur, 1);
+    if (next === cur) break; // safety
+    cur = next;
+  }
+  return out;
+}
+
+function lastDayOfMonth(year: number, monthIndex: number): number {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
 export function getNextOccurrence(
   frequency: RecurringFrequency,
   startDate: string,
   lastApplied?: string
 ): string {
-  if (!startDate) {
-    return new Date().toISOString().split('T')[0];
-  }
+  const startIso = normalizeIsoDate(startDate);
+  if (!startIso) return todayIsoLocal();
   
   try {
-    const start = new Date(startDate);
-    if (isNaN(start.getTime())) {
-      return new Date().toISOString().split('T')[0];
-    }
-    
-    const base = lastApplied ? new Date(lastApplied) : start;
-    if (isNaN(base.getTime())) {
-      return start.toISOString().split('T')[0];
-    }
-    
-    const next = new Date(base);
+    const start = parseIsoDateLocal(startIso);
+    if (isNaN(start.getTime())) return todayIsoLocal();
+
+    const baseIso = normalizeIsoDate(lastApplied) || startIso;
+    const base = parseIsoDateLocal(baseIso);
+    if (isNaN(base.getTime())) return startIso;
+
+    const next = new Date(base.getFullYear(), base.getMonth(), base.getDate(), 0, 0, 0, 0);
 
     switch (frequency) {
       case 'daily':
@@ -33,32 +158,32 @@ export function getNextOccurrence(
         next.setDate(next.getDate() + 14);
         break;
       case 'monthly': {
-        // Get the desired day of month from the start date
-        // This ensures we always try to use the same day each month
         const desiredDay = start.getDate();
-        
-        // Move to the next month
-        const currentMonth = next.getMonth();
-        next.setMonth(currentMonth + 1);
-        
-        // Get the last day of the target month
-        const lastDayOfMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
-        
-        // Use the desired day, or the last day of the month if the desired day doesn't exist
-        // (e.g., if start date is Jan 31, Feb will use Feb 28/29, Mar will use Mar 31)
-        const dayToUse = Math.min(desiredDay, lastDayOfMonth);
+        const y = next.getFullYear();
+        const m = next.getMonth() + 1;
+        const last = lastDayOfMonth(y, m);
+        const dayToUse = Math.min(desiredDay, last);
+        next.setFullYear(y);
+        next.setMonth(m);
         next.setDate(dayToUse);
         break;
       }
-      case 'yearly':
-        next.setFullYear(next.getFullYear() + 1);
+      case 'yearly': {
+        const desiredMonth = start.getMonth();
+        const desiredDay = start.getDate();
+        const y = next.getFullYear() + 1;
+        const last = lastDayOfMonth(y, desiredMonth);
+        next.setFullYear(y);
+        next.setMonth(desiredMonth);
+        next.setDate(Math.min(desiredDay, last));
         break;
+      }
     }
 
-    return next.toISOString().split('T')[0];
+    return formatIsoDateLocal(next);
   } catch (error) {
     console.error('Error calculating next occurrence:', error);
-    return new Date().toISOString().split('T')[0];
+    return todayIsoLocal();
   }
 }
 
@@ -68,19 +193,16 @@ export function shouldGenerateTransaction(
   endDate: string | undefined,
   lastApplied: string | undefined
 ): boolean {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const start = new Date(startDate);
-  start.setHours(0, 0, 0, 0);
+  const today = todayIsoLocal();
+  const start = normalizeIsoDate(startDate);
+  if (!start) return false;
 
   if (start > today) {
     return false; // Not started yet
   }
 
-  if (endDate) {
-    const end = new Date(endDate);
-    end.setHours(0, 0, 0, 0);
+  const end = normalizeIsoDate(endDate);
+  if (end) {
     if (end < today) {
       return false; // Already ended
     }
@@ -91,12 +213,7 @@ export function shouldGenerateTransaction(
     return start <= today;
   }
 
-  const last = new Date(lastApplied);
-  last.setHours(0, 0, 0, 0);
-
-  const next = new Date(getNextOccurrence(frequency, startDate, lastApplied));
-  next.setHours(0, 0, 0, 0);
-
+  const next = getNextOccurrence(frequency, start, lastApplied);
   return next <= today;
 }
 
@@ -111,23 +228,123 @@ export function getOccurrenceDatesUpTo(
   lastApplied: string | undefined,
   upToDate: string
 ): string[] {
+  const startIso = normalizeIsoDate(startDate);
+  const upToIso = normalizeIsoDate(upToDate);
+  if (!startIso || !upToIso) return [];
+  const endIso = normalizeIsoDate(endDate);
+
   const results: string[] = [];
-  let current = lastApplied
-    ? getNextOccurrence(frequency, startDate, lastApplied)
-    : startDate;
-  const upTo = new Date(upToDate);
-  upTo.setHours(23, 59, 59, 999);
+  let current = normalizeIsoDate(lastApplied)
+    ? getNextOccurrence(frequency, startIso, lastApplied)
+    : startIso;
 
   while (true) {
-    const d = new Date(current);
-    if (d > upTo) break;
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(0, 0, 0, 0);
-      if (d > end) break;
-    }
+    if (current > upToIso) break;
+    if (endIso && current > endIso) break;
     results.push(current);
-    current = getNextOccurrence(frequency, startDate, current);
+    const next = getNextOccurrence(frequency, startIso, current);
+    if (next === current) break; // safety
+    current = next;
+  }
+  return results;
+}
+
+function firstOccurrenceOnOrAfter(
+  frequency: RecurringFrequency,
+  startIso: string,
+  targetIso: string
+): string {
+  const start = parseIsoDateLocal(startIso);
+  const target = parseIsoDateLocal(targetIso);
+  if (isNaN(start.getTime()) || isNaN(target.getTime())) return startIso;
+  if (start >= target) return startIso;
+
+  if (frequency === 'daily' || frequency === 'weekly' || frequency === 'fortnightly') {
+    const stepDays = frequency === 'daily' ? 1 : frequency === 'weekly' ? 7 : 14;
+    const diffDays = Math.floor((target.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    const n = Math.ceil(diffDays / stepDays);
+    return formatIsoDateLocal(new Date(start.getFullYear(), start.getMonth(), start.getDate() + n * stepDays));
+  }
+
+  if (frequency === 'monthly') {
+    const desiredDay = start.getDate();
+    const monthsDiff =
+      (target.getFullYear() - start.getFullYear()) * 12 + (target.getMonth() - start.getMonth());
+    let offset = Math.max(0, monthsDiff);
+    while (offset < monthsDiff + 3) {
+      const y = start.getFullYear() + Math.floor((start.getMonth() + offset) / 12);
+      const m = (start.getMonth() + offset) % 12;
+      const day = Math.min(desiredDay, lastDayOfMonth(y, m));
+      const candidate = new Date(y, m, day, 0, 0, 0, 0);
+      if (candidate >= target) return formatIsoDateLocal(candidate);
+      offset += 1;
+    }
+    // fallback to a small iteration from the last candidate
+    let cur = startIso;
+    while (cur < targetIso) {
+      const next = getNextOccurrence('monthly', startIso, cur);
+      if (next === cur) break;
+      cur = next;
+    }
+    return cur;
+  }
+
+  // yearly
+  const desiredMonth = start.getMonth();
+  const desiredDay = start.getDate();
+  const yearsDiff = target.getFullYear() - start.getFullYear();
+  let offset = Math.max(0, yearsDiff);
+  while (offset < yearsDiff + 3) {
+    const y = start.getFullYear() + offset;
+    const day = Math.min(desiredDay, lastDayOfMonth(y, desiredMonth));
+    const candidate = new Date(y, desiredMonth, day, 0, 0, 0, 0);
+    if (candidate >= target) return formatIsoDateLocal(candidate);
+    offset += 1;
+  }
+  let cur = startIso;
+  while (cur < targetIso) {
+    const next = getNextOccurrence('yearly', startIso, cur);
+    if (next === cur) break;
+    cur = next;
+  }
+  return cur;
+}
+
+/**
+ * Returns occurrence dates that fall within [fromDate, toDate] inclusive.
+ * Respects endDate if provided.
+ */
+export function getOccurrenceDatesBetween(
+  frequency: RecurringFrequency,
+  startDate: string,
+  endDate: string | undefined,
+  fromDate: string,
+  toDate: string
+): string[] {
+  const startIso = normalizeIsoDate(startDate);
+  const fromIso = normalizeIsoDate(fromDate);
+  const toIso = normalizeIsoDate(toDate);
+  if (!startIso || !fromIso || !toIso) return [];
+  if (fromIso > toIso) return [];
+
+  const endIso = normalizeIsoDate(endDate);
+  if (endIso && endIso < fromIso) return [];
+
+  const first = firstOccurrenceOnOrAfter(frequency, startIso, fromIso);
+  if (first > toIso) return [];
+  if (endIso && first > endIso) return [];
+
+  const results: string[] = [];
+  let current = first;
+  let guard = 0;
+  while (current <= toIso) {
+    if (endIso && current > endIso) break;
+    results.push(current);
+    const next = getNextOccurrence(frequency, startIso, current);
+    if (next === current) break;
+    current = next;
+    guard += 1;
+    if (guard > 100000) break; // safety
   }
   return results;
 }
@@ -138,7 +355,8 @@ export function formatDate(dateString: string): string {
   }
   
   try {
-    const date = new Date(dateString);
+    const normalized = normalizeIsoDate(dateString);
+    const date = normalized ? parseIsoDateLocal(normalized) : new Date(dateString);
     if (isNaN(date.getTime())) {
       return 'Invalid date';
     }

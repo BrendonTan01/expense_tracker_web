@@ -17,8 +17,17 @@ const Summary = lazy(() => import('./components/Summary'));
 const RecurringTransactionManager = lazy(() => import('./components/RecurringTransactionManager'));
 const BudgetManager = lazy(() => import('./components/BudgetManager'));
 const Reflections = lazy(() => import('./components/Reflections'));
+const CalendarView = lazy(() => import('./components/CalendarView'));
 
-type Tab = 'summary' | 'transactions' | 'reflections' | 'settings' | 'buckets' | 'recurring' | 'budgets';
+type Tab =
+  | 'summary'
+  | 'calendar'
+  | 'transactions'
+  | 'reflections'
+  | 'settings'
+  | 'buckets'
+  | 'recurring'
+  | 'budgets';
 
 // Error Boundary Component
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -650,6 +659,12 @@ function App() {
             Summary
           </button>
           <button
+            className={`tab ${activeTab === 'calendar' ? 'active' : ''}`}
+            onClick={() => setActiveTab('calendar')}
+          >
+            Calendar
+          </button>
+          <button
             className={`tab ${activeTab === 'transactions' ? 'active' : ''}`}
             onClick={() => {
               if (state.buckets.length === 0) {
@@ -679,6 +694,19 @@ function App() {
         {activeTab === 'summary' && (
           <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading summary...</div>}>
             <Summary transactions={state.transactions} buckets={state.buckets} budgets={state.budgets} />
+          </Suspense>
+        )}
+
+        {activeTab === 'calendar' && (
+          <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading calendar...</div>}>
+            <CalendarView
+              transactions={state.transactions}
+              buckets={state.buckets}
+              recurringTransactions={state.recurringTransactions}
+              budgets={state.budgets}
+              onEditTransaction={handleEditTransaction}
+              onDeleteTransaction={handleDeleteTransaction}
+            />
           </Suspense>
         )}
 
