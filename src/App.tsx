@@ -53,7 +53,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 function App() {
-  const { user, logout, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [state, setState] = useState<AppState>({
     buckets: [],
     transactions: [],
@@ -579,12 +579,6 @@ function App() {
           <h1>Expense Tracker</h1>
           <div className="app-header-user-info">
             <span className="user-email">{user.email}</span>
-            <button
-              onClick={logout}
-              className="btn-logout"
-            >
-              Logout
-            </button>
           </div>
         </div>
         <nav className="tabs">
