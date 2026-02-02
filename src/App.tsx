@@ -114,49 +114,75 @@ function App() {
       const newTransactions: Transaction[] = [];
       const updatedRecurring: RecurringTransaction[] = [];
       const today = new Date().toISOString().split('T')[0];
+      const normalizeIsoDate = (value: string | undefined): string | undefined => {
+        if (!value) return undefined;
+        const d = String(value).split('T')[0];
+        return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined;
+      };
+      const maxIsoDate = (...values: Array<string | undefined>): string | undefined => {
+        let max: string | undefined;
+        for (const v of values) {
+          if (!v) continue;
+          if (!max || v > max) max = v;
+        }
+        return max;
+      };
 
       for (const recurring of currentState.recurringTransactions) {
-        if (
-          !shouldGenerateTransaction(
-            recurring.frequency,
-            recurring.startDate,
-            recurring.endDate,
-            recurring.lastApplied
-          )
-        ) {
-          updatedRecurring.push(recurring);
-          continue;
-        }
+        const existingDatesArr = currentState.transactions
+          .filter((t) => t.recurringId === recurring.id)
+          .map((t) => normalizeIsoDate(t.date))
+          .filter((d): d is string => Boolean(d));
 
-        const occurrenceDates = getOccurrenceDatesUpTo(
+        const existingUpToTodaySorted = existingDatesArr
+          .filter((d) => d <= today)
+          .sort();
+        const latestExistingUpToToday =
+          existingUpToTodaySorted.length > 0
+            ? existingUpToTodaySorted[existingUpToTodaySorted.length - 1]
+            : undefined;
+
+        const effectiveLastApplied = maxIsoDate(
+          normalizeIsoDate(recurring.lastApplied),
+          latestExistingUpToToday
+        );
+
+        const shouldGenerate = shouldGenerateTransaction(
           recurring.frequency,
           recurring.startDate,
           recurring.endDate,
-          recurring.lastApplied,
-          today
+          effectiveLastApplied
         );
 
-        const existingDates = new Set(
-          currentState.transactions
-            .filter((t) => t.recurringId === recurring.id)
-            .map((t) => t.date)
-        );
+        let latestGenerated: string | undefined = effectiveLastApplied;
+        if (shouldGenerate) {
+          const occurrenceDates = getOccurrenceDatesUpTo(
+            recurring.frequency,
+            recurring.startDate,
+            recurring.endDate,
+            effectiveLastApplied,
+            today
+          );
 
-        let latestGenerated: string | undefined = recurring.lastApplied;
-        for (const date of occurrenceDates) {
-          if (existingDates.has(date)) continue;
-          newTransactions.push({
-            id: generateId(),
-            ...recurring.transaction,
-            date,
-            isRecurring: true,
-            recurringId: recurring.id,
-          });
-          latestGenerated = date;
+          const existingDates = new Set(existingDatesArr);
+
+          for (const date of occurrenceDates) {
+            if (existingDates.has(date)) continue;
+            newTransactions.push({
+              id: generateId(),
+              ...recurring.transaction,
+              date,
+              isRecurring: true,
+              recurringId: recurring.id,
+            });
+            latestGenerated = date;
+          }
         }
 
         updatedRecurring.push({
           ...recurring,
+          // Keep schedule progress aligned even if some occurrences already exist
+          // (e.g. imported/manual entries) so "Next" advances correctly.
           lastApplied: latestGenerated ?? recurring.lastApplied,
         });
       }

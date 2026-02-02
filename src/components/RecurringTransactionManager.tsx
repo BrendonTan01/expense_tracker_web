@@ -30,6 +30,9 @@ export default function RecurringTransactionManager({
       const generatedTransactions = transactions.filter(
         (t) => t.recurringId === recurring.id
       );
+      const lastGenerated = generatedTransactions.length > 0
+        ? generatedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date
+        : null;
       
       // Calculate status based on dates
       const startDate = new Date(recurring.startDate);
@@ -63,7 +66,7 @@ export default function RecurringTransactionManager({
       const nextDate = getNextOccurrence(
         recurring.frequency,
         recurring.startDate,
-        recurring.lastApplied
+        lastGenerated || recurring.lastApplied
       );
 
       return {
@@ -72,9 +75,7 @@ export default function RecurringTransactionManager({
         status,
         isActive,
         nextDate,
-        lastGenerated: generatedTransactions.length > 0
-          ? generatedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date
-          : null,
+        lastGenerated,
       };
     });
   }, [recurringTransactions, transactions]);

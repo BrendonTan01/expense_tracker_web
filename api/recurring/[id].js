@@ -55,32 +55,55 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PUT') {
-      const { transaction, frequency, startDate, endDate, lastApplied } = req.body;
+      // Allow partial updates (e.g. advancing lastApplied) so the client can
+      // persist schedule progress without resending the whole recurring object.
+      const body = req.body || {};
+      const { transaction, frequency, startDate, endDate, lastApplied } = body;
 
-      if (!transaction || !frequency || !startDate) {
-        return res.status(400).json({ error: 'transaction, frequency, and startDate are required' });
+      const updateData = {};
+
+      if (transaction !== undefined) {
+        if (!transaction || typeof transaction !== 'object') {
+          return res.status(400).json({ error: 'transaction must be an object when provided' });
+        }
+        if (!['expense', 'income', 'investment'].includes(transaction.type)) {
+          return res.status(400).json({ error: 'transaction.type must be either "expense", "income", or "investment"' });
+        }
+        updateData.type = transaction.type;
+        updateData.amount = transaction.amount;
+        updateData.description = transaction.description;
+        updateData.bucketId = transaction.bucketId || null;
       }
 
-      if (!['daily', 'weekly', 'fortnightly', 'monthly', 'yearly'].includes(frequency)) {
-        return res.status(400).json({ error: 'frequency must be daily, weekly, fortnightly, monthly, or yearly' });
+      if (frequency !== undefined) {
+        if (!['daily', 'weekly', 'fortnightly', 'monthly', 'yearly'].includes(frequency)) {
+          return res.status(400).json({ error: 'frequency must be daily, weekly, fortnightly, monthly, or yearly' });
+        }
+        updateData.frequency = frequency;
       }
 
-      if (!['expense', 'income', 'investment'].includes(transaction.type)) {
-        return res.status(400).json({ error: 'transaction.type must be either "expense", "income", or "investment"' });
+      if (startDate !== undefined) {
+        if (!startDate) {
+          return res.status(400).json({ error: 'startDate cannot be empty when provided' });
+        }
+        updateData.startDate = startDate;
+      }
+
+      // Only update nullable fields if the key is present in the request body.
+      if (Object.prototype.hasOwnProperty.call(body, 'endDate')) {
+        updateData.endDate = endDate || null;
+      }
+      if (Object.prototype.hasOwnProperty.call(body, 'lastApplied')) {
+        updateData.lastApplied = lastApplied || null;
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ error: 'No valid fields provided for update' });
       }
 
       const { data, error } = await supabase
         .from('recurring_transactions')
-        .update({
-          type: transaction.type,
-          amount: transaction.amount,
-          description: transaction.description,
-          bucketId: transaction.bucketId || null,
-          frequency,
-          startDate,
-          endDate: endDate || null,
-          lastApplied: lastApplied || null,
-        })
+        .update(updateData)
         .eq('id', id)
         .select()
         .single();
