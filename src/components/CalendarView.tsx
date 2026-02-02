@@ -24,6 +24,8 @@ type DayTypePresence = {
   investment: boolean;
 };
 
+type HeatLevel = 0 | 1 | 2 | 3 | 4;
+
 function dayTypePresence(items: CalendarItem[]): DayTypePresence {
   const out: DayTypePresence = { expense: false, income: false, investment: false };
   for (const item of items) {
@@ -53,6 +55,77 @@ function DayTypeMarkers(props: { items: CalendarItem[]; className?: string }) {
       {presence.investment && <span className="calendar-marker calendar-marker--investment" />}
     </div>
   );
+}
+
+function postedExpenseTotal(items: CalendarItem[]): number {
+  let total = 0;
+  for (const item of items) {
+    if (item.kind !== 'posted') continue;
+    if (item.transaction.type !== 'expense') continue;
+    total += item.transaction.amount;
+  }
+  return total;
+}
+
+function quantileIndex(n: number, p: 0.25 | 0.5 | 0.75): number {
+  if (n <= 1) return 0;
+  return Math.floor((n - 1) * p);
+}
+
+function computeHeatLevelsByDate(dates: string[], itemsByDate: Map<string, CalendarItem[]>): Map<string, HeatLevel> {
+  const expenseByDate = new Map<string, number>();
+  const nonZero: number[] = [];
+
+  for (const dIso of dates) {
+    const total = postedExpenseTotal(itemsByDate.get(dIso) || []);
+    expenseByDate.set(dIso, total);
+    if (total > 0) nonZero.push(total);
+  }
+
+  const levels = new Map<string, HeatLevel>();
+  if (nonZero.length === 0) {
+    for (const dIso of dates) levels.set(dIso, 0);
+    return levels;
+  }
+
+  nonZero.sort((a, b) => a - b);
+
+  if (nonZero.length === 1) {
+    const only = nonZero[0];
+    for (const dIso of dates) {
+      const v = expenseByDate.get(dIso) || 0;
+      levels.set(dIso, v === only ? 4 : 0);
+    }
+    return levels;
+  }
+
+  const min = nonZero[0];
+  const max = nonZero[nonZero.length - 1];
+  if (min === max) {
+    for (const dIso of dates) {
+      const v = expenseByDate.get(dIso) || 0;
+      levels.set(dIso, v > 0 ? 2 : 0);
+    }
+    return levels;
+  }
+
+  const q1 = nonZero[quantileIndex(nonZero.length, 0.25)];
+  const q2 = nonZero[quantileIndex(nonZero.length, 0.5)];
+  const q3 = nonZero[quantileIndex(nonZero.length, 0.75)];
+
+  for (const dIso of dates) {
+    const v = expenseByDate.get(dIso) || 0;
+    if (v <= 0) {
+      levels.set(dIso, 0);
+      continue;
+    }
+    if (v <= q1) levels.set(dIso, 1);
+    else if (v <= q2) levels.set(dIso, 2);
+    else if (v <= q3) levels.set(dIso, 3);
+    else levels.set(dIso, 4);
+  }
+
+  return levels;
 }
 
 function clampIsoDate(value: string | undefined, fallback: string): string {
@@ -184,8 +257,9 @@ function MonthGrid(props: {
   itemsByDate: Map<string, CalendarItem[]>;
   onSelectDate: (iso: string) => void;
   selectedDate: string;
+  heatLevelsByDate: Map<string, HeatLevel>;
 }) {
-  const { anchorIso, itemsByDate, onSelectDate, selectedDate } = props;
+  const { anchorIso, itemsByDate, onSelectDate, selectedDate, heatLevelsByDate } = props;
   const start = startOfMonthIsoLocal(anchorIso);
   const end = endOfMonthIsoLocal(anchorIso);
   const monthStart = parseIsoDateLocal(start);
@@ -219,10 +293,6 @@ function MonthGrid(props: {
         {cells.map((iso, idx) => {
           if (!iso) return <div key={`empty-${idx}`} className="calendar-cell calendar-cell--empty" />;
           const items = itemsByDate.get(iso) || [];
-          const posted = items.filter((i) => i.kind === 'posted');
-          const expenseTotal = posted
-            .filter((i) => i.kind === 'posted' && i.transaction.type === 'expense')
-            .reduce((s, i) => s + (i.kind === 'posted' ? i.transaction.amount : 0), 0);
 
           const isSelected = iso === selectedDate;
           const isToday = iso === todayIsoLocal();
@@ -234,6 +304,7 @@ function MonthGrid(props: {
               type="button"
               className={[
                 'calendar-cell',
+                heatLevelsByDate.get(iso) ? `calendar-cell--heat-${heatLevelsByDate.get(iso)}` : '',
                 isSelected ? 'calendar-cell--selected' : '',
                 isToday ? 'calendar-cell--today' : '',
                 inMonth ? '' : 'calendar-cell--muted',
@@ -242,7 +313,6 @@ function MonthGrid(props: {
             >
               <div className="calendar-cell-top">
                 <span className="calendar-day">{parseIsoDateLocal(iso).getDate()}</span>
-                {expenseTotal > 0 && <span className="calendar-mini">{formatCurrency(expenseTotal)}</span>}
               </div>
               <div className="calendar-cell-bottom">
                 <DayTypeMarkers items={items} />
@@ -662,6 +732,20 @@ export default function CalendarView(props: {
           ? `${monthLabelFromIso(range.start)} • Week of ${parseIsoDateLocal(range.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
           : parseIsoDateLocal(anchorIso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
+  const monthHeatLevelsByDate = useMemo(() => {
+    if (mode !== 'month') return new Map<string, HeatLevel>();
+    const monthStart = startOfMonthIsoLocal(anchorIso);
+    const monthEnd = endOfMonthIsoLocal(anchorIso);
+    const days = enumerateIsoDaysInclusive(monthStart, monthEnd);
+    return computeHeatLevelsByDate(days, itemsByDate);
+  }, [mode, anchorIso, itemsByDate]);
+
+  const weekHeatLevelsByDate = useMemo(() => {
+    if (mode !== 'week') return new Map<string, HeatLevel>();
+    const days = enumerateIsoDaysInclusive(range.start, range.end);
+    return computeHeatLevelsByDate(days, itemsByDate);
+  }, [mode, range.start, range.end, itemsByDate]);
+
   return (
     <div className="calendar-view">
       <div className="calendar-toolbar">
@@ -772,6 +856,27 @@ export default function CalendarView(props: {
             Include scheduled in totals
           </label>
         </div>
+        {(mode === 'month' || mode === 'week') && (
+          <div className="calendar-legend" aria-label="Calendar legend">
+            <div className="calendar-legend-row">
+              <span className="calendar-legend-label">Spending heat (expenses):</span>
+              <span className="calendar-legend-heat">
+                <span className="calendar-legend-heat-box calendar-cell--heat-1" aria-label="Low spend" />
+                <span className="calendar-legend-heat-box calendar-cell--heat-2" aria-label="Medium-low spend" />
+                <span className="calendar-legend-heat-box calendar-cell--heat-3" aria-label="Medium-high spend" />
+                <span className="calendar-legend-heat-box calendar-cell--heat-4" aria-label="High spend" />
+              </span>
+            </div>
+            <div className="calendar-legend-row">
+              <span className="calendar-legend-label">Transaction types:</span>
+              <span className="calendar-markers" aria-label="Expense, income, investment markers">
+                <span className="calendar-marker calendar-marker--expense" />
+                <span className="calendar-marker calendar-marker--income" />
+                <span className="calendar-marker calendar-marker--investment" />
+              </span>
+            </div>
+          </div>
+        )}
         {calendarData.scheduledTruncated && (
           <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
             Scheduled occurrences were capped for performance. Zoom in (week/day) or add filters to see more.
@@ -786,6 +891,7 @@ export default function CalendarView(props: {
               anchorIso={anchorIso}
               itemsByDate={itemsByDate}
               selectedDate={selectedIso}
+              heatLevelsByDate={monthHeatLevelsByDate}
               onSelectDate={(iso) => setSelectedIso(iso)}
             />
           )}
@@ -810,10 +916,6 @@ export default function CalendarView(props: {
               <div className="calendar-week-days">
                 {enumerateIsoDaysInclusive(range.start, range.end).map((dIso) => {
                   const items = itemsByDate.get(dIso) || [];
-                  const posted = items.filter((i) => i.kind === 'posted');
-                  const dayExpenses = posted
-                    .filter((i) => i.kind === 'posted' && i.transaction.type === 'expense')
-                    .reduce((s, i) => s + (i.kind === 'posted' ? i.transaction.amount : 0), 0);
                   const isSelected = dIso === selectedIso;
                   const isToday = dIso === todayIsoLocal();
 
@@ -825,6 +927,7 @@ export default function CalendarView(props: {
                       type="button"
                       className={[
                         'calendar-week-day',
+                        weekHeatLevelsByDate.get(dIso) ? `calendar-week-day--heat-${weekHeatLevelsByDate.get(dIso)}` : '',
                         isSelected ? 'calendar-week-day--selected' : '',
                         isToday ? 'calendar-week-day--today' : '',
                       ].join(' ')}
@@ -835,9 +938,6 @@ export default function CalendarView(props: {
                           {parseIsoDateLocal(dIso).toLocaleDateString('en-US', { weekday: 'short' })}
                         </div>
                         <div className="calendar-week-day-date">{parseIsoDateLocal(dIso).getDate()}</div>
-                      </div>
-                      <div className="calendar-week-day-mid">
-                        {dayExpenses > 0 ? <span className="calendar-mini">{formatCurrency(dayExpenses)}</span> : <span className="calendar-mini">—</span>}
                       </div>
                       {topItems.length > 0 && (
                         <div className="calendar-week-day-list">
