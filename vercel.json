@@ -4,6 +4,14 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/api/buckets/:id",
+      "destination": "/api/buckets?id=:id"
+    },
+    {
+      "source": "/api/budgets/:id",
+      "destination": "/api/budgets?id=:id"
+    },
+    {
       "source": "/((?!api).*)",
       "destination": "/index.html"
     }
