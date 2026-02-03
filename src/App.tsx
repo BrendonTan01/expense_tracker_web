@@ -73,6 +73,7 @@ function App() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionStatus, setActionStatus] = useState<{ phase: 'pending' | 'success'; message: string } | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -240,12 +241,16 @@ function App() {
 
   const handleAddBucket = async (bucket: Bucket) => {
     try {
+      setActionStatus({ phase: 'pending', message: 'Saving bucket...' });
       const newBucket = await bucketsApi.create(bucket);
       setState((prev) => ({
         ...prev,
         buckets: [...prev.buckets, newBucket],
       }));
+      setActionStatus({ phase: 'success', message: 'Bucket saved' });
+      setTimeout(() => setActionStatus(null), 2000);
     } catch (err) {
+      setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to create bucket');
       console.error('Failed to create bucket:', err);
     }
@@ -253,12 +258,16 @@ function App() {
 
   const handleUpdateBucket = async (id: string, updates: Partial<Bucket>) => {
     try {
+      setActionStatus({ phase: 'pending', message: 'Updating bucket...' });
       const updatedBucket = await bucketsApi.update(id, updates);
       setState((prev) => ({
         ...prev,
         buckets: prev.buckets.map((b) => (b.id === id ? updatedBucket : b)),
       }));
+      setActionStatus({ phase: 'success', message: 'Bucket updated' });
+      setTimeout(() => setActionStatus(null), 2000);
     } catch (err) {
+      setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to update bucket');
       console.error('Failed to update bucket:', err);
     }
@@ -266,12 +275,16 @@ function App() {
 
   const handleDeleteBucket = async (id: string) => {
     try {
+      setActionStatus({ phase: 'pending', message: 'Deleting bucket...' });
       await bucketsApi.delete(id);
       setState((prev) => ({
         ...prev,
         buckets: prev.buckets.filter((b) => b.id !== id),
       }));
+      setActionStatus({ phase: 'success', message: 'Bucket deleted' });
+      setTimeout(() => setActionStatus(null), 2000);
     } catch (err) {
+      setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to delete bucket');
       console.error('Failed to delete bucket:', err);
     }
@@ -286,6 +299,10 @@ function App() {
     }
 
     try {
+      setActionStatus({
+        phase: 'pending',
+        message: editingTransaction ? 'Updating transaction...' : 'Saving transaction...',
+      });
       if (editingTransaction) {
         const updatedTransaction = await transactionsApi.update(editingTransaction.id, {
           ...transactionData,
@@ -299,6 +316,7 @@ function App() {
           ),
         }));
         setEditingTransaction(null);
+        setActionStatus({ phase: 'success', message: 'Transaction updated' });
       } else {
         const newTransaction = await transactionsApi.create({
           ...transactionData,
@@ -309,8 +327,11 @@ function App() {
           ...prev,
           transactions: [...prev.transactions, newTransaction],
         }));
+        setActionStatus({ phase: 'success', message: 'Transaction saved' });
       }
+      setTimeout(() => setActionStatus(null), 2000);
     } catch (err) {
+      setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to save transaction');
       console.error('Failed to save transaction:', err);
     }
@@ -359,12 +380,16 @@ function App() {
 
   const handleBulkDeleteTransactions = async (ids: string[]) => {
     try {
+      setActionStatus({ phase: 'pending', message: 'Deleting transactions...' });
       await Promise.all(ids.map(id => transactionsApi.delete(id)));
       setState((prev) => ({
         ...prev,
         transactions: prev.transactions.filter(t => !ids.includes(t.id)),
       }));
+      setActionStatus({ phase: 'success', message: 'Transactions deleted' });
+      setTimeout(() => setActionStatus(null), 2000);
     } catch (err) {
+      setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to delete transactions');
       console.error('Failed to delete transactions:', err);
     }
@@ -372,12 +397,14 @@ function App() {
 
   const handleUseTemplate = (template: TransactionTemplate) => {
     setEditingTransaction(null);
+    // Templates always use system date by default when used
+    const systemDate = new Date().toISOString().split('T')[0];
     handleAddTransaction({
       type: template.type,
       amount: template.amount || 0,
       description: template.description,
       bucketId: template.bucketId,
-      date: new Date().toISOString().split('T')[0],
+      date: systemDate,
       tags: template.tags,
       notes: template.notes,
     });
@@ -424,12 +451,16 @@ function App() {
 
   const handleDeleteTransaction = async (id: string) => {
     try {
+      setActionStatus({ phase: 'pending', message: 'Deleting transaction...' });
       await transactionsApi.delete(id);
       setState((prev) => ({
         ...prev,
         transactions: prev.transactions.filter((t) => t.id !== id),
       }));
+      setActionStatus({ phase: 'success', message: 'Transaction deleted' });
+      setTimeout(() => setActionStatus(null), 2000);
     } catch (err) {
+      setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to delete transaction');
       console.error('Failed to delete transaction:', err);
     }
@@ -452,12 +483,16 @@ function App() {
 
   const handleAddRecurring = async (recurring: RecurringTransaction) => {
     try {
+      setActionStatus({ phase: 'pending', message: 'Saving recurring...' });
       const newRecurring = await recurringApi.create(recurring);
       setState((prev) => ({
         ...prev,
         recurringTransactions: [...prev.recurringTransactions, newRecurring],
       }));
+      setActionStatus({ phase: 'success', message: 'Recurring saved' });
+      setTimeout(() => setActionStatus(null), 2000);
     } catch (err) {
+      setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to create recurring transaction');
       console.error('Failed to create recurring transaction:', err);
     }
@@ -469,6 +504,7 @@ function App() {
     options?: { applyToGenerated?: 'all' | 'fromNext' }
   ) => {
     try {
+      setActionStatus({ phase: 'pending', message: 'Updating recurring...' });
       const updatedRecurring = await recurringApi.update(id, updates);
 
       let bulkUpdatedTransactions: Transaction[] | undefined;
@@ -533,7 +569,10 @@ function App() {
             : prev.transactions,
         };
       });
+      setActionStatus({ phase: 'success', message: 'Recurring updated' });
+      setTimeout(() => setActionStatus(null), 2000);
     } catch (err) {
+      setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to update recurring transaction');
       console.error('Failed to update recurring transaction:', err);
     }
@@ -541,13 +580,17 @@ function App() {
 
   const handleDeleteRecurring = async (id: string) => {
     try {
+      setActionStatus({ phase: 'pending', message: 'Deleting recurring...' });
       await recurringApi.delete(id);
       setState((prev) => ({
         ...prev,
         recurringTransactions: prev.recurringTransactions.filter((r) => r.id !== id),
         transactions: prev.transactions.filter((t) => t.recurringId !== id),
       }));
+      setActionStatus({ phase: 'success', message: 'Recurring deleted' });
+      setTimeout(() => setActionStatus(null), 2000);
     } catch (err) {
+      setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to delete recurring transaction');
       console.error('Failed to delete recurring transaction:', err);
     }
@@ -555,12 +598,16 @@ function App() {
 
   const handleAddBudget = async (budget: Budget) => {
     try {
+      setActionStatus({ phase: 'pending', message: 'Saving budget...' });
       const newBudget = await budgetsApi.create(budget);
       setState((prev) => ({
         ...prev,
         budgets: [...prev.budgets, newBudget],
       }));
+      setActionStatus({ phase: 'success', message: 'Budget saved' });
+      setTimeout(() => setActionStatus(null), 2000);
     } catch (err) {
+      setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to create budget');
       console.error('Failed to create budget:', err);
     }
@@ -568,12 +615,16 @@ function App() {
 
   const handleUpdateBudget = async (id: string, updates: Partial<Budget>) => {
     try {
+      setActionStatus({ phase: 'pending', message: 'Updating budget...' });
       const updatedBudget = await budgetsApi.update(id, updates);
       setState((prev) => ({
         ...prev,
         budgets: prev.budgets.map((b) => (b.id === id ? updatedBudget : b)),
       }));
+      setActionStatus({ phase: 'success', message: 'Budget updated' });
+      setTimeout(() => setActionStatus(null), 2000);
     } catch (err) {
+      setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to update budget');
       console.error('Failed to update budget:', err);
     }
@@ -581,12 +632,16 @@ function App() {
 
   const handleDeleteBudget = async (id: string) => {
     try {
+      setActionStatus({ phase: 'pending', message: 'Deleting budget...' });
       await budgetsApi.delete(id);
       setState((prev) => ({
         ...prev,
         budgets: prev.budgets.filter((b) => b.id !== id),
       }));
+      setActionStatus({ phase: 'success', message: 'Budget deleted' });
+      setTimeout(() => setActionStatus(null), 2000);
     } catch (err) {
+      setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to delete budget');
       console.error('Failed to delete budget:', err);
     }
@@ -642,6 +697,21 @@ function App() {
           >
             ×
           </button>
+        </div>
+      )}
+      {actionStatus && (
+        <div
+          className={`action-status action-status--${actionStatus.phase}`}
+          role="status"
+          aria-live="polite"
+        >
+          {actionStatus.phase === 'pending' && (
+            <span className="action-status__spinner" aria-hidden />
+          )}
+          {actionStatus.phase === 'success' && (
+            <span className="action-status__icon action-status__icon--success" aria-hidden>✓</span>
+          )}
+          <span className="action-status__message">{actionStatus.message}</span>
         </div>
       )}
       <header className="app-header">
