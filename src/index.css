@@ -50,6 +50,65 @@ body {
   padding: 20px;
 }
 
+/* Action status (loading / complete) when posting, deleting or modifying tables */
+.action-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin: 0 1rem 1rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  box-shadow: var(--shadow);
+}
+
+.action-status--pending {
+  background: var(--light-bg);
+  color: var(--secondary-color);
+  border: 1px solid var(--border-color);
+}
+
+.action-status--success {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--success-color);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.action-status__spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: action-status-spin 0.7s linear infinite;
+}
+
+@keyframes action-status-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.action-status__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.action-status__icon--success {
+  background: var(--success-color);
+  color: #fff;
+}
+
+.action-status__message {
+  font-weight: 500;
+}
+
 .app-header {
   background: var(--card-bg);
   padding: 24px;
