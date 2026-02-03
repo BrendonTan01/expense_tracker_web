@@ -700,18 +700,20 @@ function App() {
         </div>
       )}
       {actionStatus && (
-        <div
-          className={`action-status action-status--${actionStatus.phase}`}
-          role="status"
-          aria-live="polite"
-        >
-          {actionStatus.phase === 'pending' && (
-            <span className="action-status__spinner" aria-hidden />
-          )}
-          {actionStatus.phase === 'success' && (
-            <span className="action-status__icon action-status__icon--success" aria-hidden>✓</span>
-          )}
-          <span className="action-status__message">{actionStatus.message}</span>
+        <div className="action-status-overlay" aria-hidden="false">
+          <div
+            className={`action-status action-status--${actionStatus.phase}`}
+            role="status"
+            aria-live="polite"
+          >
+            {actionStatus.phase === 'pending' && (
+              <span className="action-status__spinner" aria-hidden />
+            )}
+            {actionStatus.phase === 'success' && (
+              <span className="action-status__icon action-status__icon--success" aria-hidden>✓</span>
+            )}
+            <span className="action-status__message">{actionStatus.message}</span>
+          </div>
         </div>
       )}
       <header className="app-header">

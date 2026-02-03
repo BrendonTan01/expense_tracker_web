@@ -51,15 +51,26 @@ body {
 }
 
 /* Action status (loading / complete) when posting, deleting or modifying tables */
+.action-status-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  pointer-events: none;
+}
+
 .action-status {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  margin: 0 1rem 1rem;
+  padding: 0.75rem 1.25rem;
+  margin: 0 1rem;
   border-radius: 8px;
   font-size: 0.95rem;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
+  pointer-events: auto;
 }
 
 .action-status--pending {
