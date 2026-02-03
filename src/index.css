@@ -1254,6 +1254,46 @@ td {
   border-radius: 10px;
 }
 
+.calendar-range-summary-top {
+  padding: 14px;
+  background: var(--light-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+}
+
+.calendar-range-summary-top-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.calendar-filters-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.calendar-filters-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.calendar-filters-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 .calendar-filters-row {
   display: flex;
   gap: 10px;

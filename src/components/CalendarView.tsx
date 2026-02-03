@@ -580,6 +580,7 @@ export default function CalendarView(props: {
   const [typeFilter, setTypeFilter] = useState<'all' | Transaction['type']>('all');
   const [bucketFilter, setBucketFilter] = useState<string>('all');
   const [tagFilter, setTagFilter] = useState<string>('all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const range = useMemo(() => buildRangeForMode(mode, anchorIso), [mode, anchorIso]);
 
@@ -723,6 +724,11 @@ export default function CalendarView(props: {
   const rangeDaysCount = useMemo(() => enumerateIsoDaysInclusive(range.start, range.end).length, [range.start, range.end]);
   const avgSpendPerDay = rangeDaysCount > 0 ? stats.expenses / rangeDaysCount : 0;
 
+  const activeFilterCount =
+    (typeFilter !== 'all' ? 1 : 0) +
+    (bucketFilter !== 'all' ? 1 : 0) +
+    (tagFilter !== 'all' ? 1 : 0);
+
   const headerLabel =
     mode === 'month'
       ? monthLabelFromIso(anchorIso)
@@ -822,31 +828,16 @@ export default function CalendarView(props: {
         </div>
       </div>
 
-      <div className="calendar-filters">
-        <div className="calendar-filters-row">
-          <select className="input input-sm" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as any)}>
-            <option value="all">All Types</option>
-            <option value="expense">Expenses</option>
-            <option value="income">Income</option>
-            <option value="investment">Investments</option>
-          </select>
-          <select className="input input-sm" value={bucketFilter} onChange={(e) => setBucketFilter(e.target.value)}>
-            <option value="all">All Buckets</option>
-            <option value="none">No Bucket</option>
-            {buckets.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-          <select className="input input-sm" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
-            <option value="all">All Tags</option>
-            {allTags.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+      <div className="calendar-range-summary-top">
+        <div className="calendar-range-summary-top-header">
+          <div>
+            <div style={{ fontWeight: 700, color: 'var(--text-color)' }}>Range summary</div>
+            <div style={{ marginTop: '4px', fontSize: '12px', color: 'var(--text-muted)' }}>
+              {rangeCounts.posted} posted • {rangeCounts.scheduled} scheduled
+              {includeScheduledInStats ? ' • totals include scheduled' : ' • totals exclude scheduled'}
+            </div>
+          </div>
+
           <label className="calendar-checkbox">
             <input
               type="checkbox"
@@ -856,6 +847,104 @@ export default function CalendarView(props: {
             Include scheduled in totals
           </label>
         </div>
+
+        <div className="calendar-summary-cards">
+          <div className="calendar-summary-card">
+            <div className="label">Income</div>
+            <div className="value income">{formatCurrency(stats.income)}</div>
+          </div>
+          <div className="calendar-summary-card">
+            <div className="label">Expenses</div>
+            <div className="value expense">{formatCurrency(stats.expenses)}</div>
+          </div>
+          <div className="calendar-summary-card">
+            <div className="label">Investments</div>
+            <div className="value investment">{formatCurrency(stats.investments)}</div>
+          </div>
+          <div className="calendar-summary-card">
+            <div className="label">Net</div>
+            <div className={`value ${stats.balance >= 0 ? 'income' : 'expense'}`}>{formatCurrency(stats.balance)}</div>
+          </div>
+          {mode === 'month' && (
+            <div className="calendar-summary-card">
+              <div className="label">Avg spend/day</div>
+              <div className="value">{formatCurrency(avgSpendPerDay)}</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="calendar-filters">
+        <div className="calendar-filters-header">
+          <div className="calendar-filters-header-left">
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary"
+              aria-expanded={filtersOpen}
+              aria-controls="calendar-filters-panel"
+              onClick={() => setFiltersOpen((v) => !v)}
+            >
+              Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+            </button>
+
+            {!filtersOpen && activeFilterCount > 0 && (
+              <div className="calendar-filters-active" aria-label="Active filters">
+                {typeFilter !== 'all' && <span className="calendar-pill">Type: {typeFilter}</span>}
+                {bucketFilter !== 'all' && (
+                  <span className="calendar-pill">
+                    Bucket:{' '}
+                    {bucketFilter === 'none'
+                      ? 'No Bucket'
+                      : buckets.find((b) => b.id === bucketFilter)?.name || 'Unknown'}
+                  </span>
+                )}
+                {tagFilter !== 'all' && <span className="calendar-pill">Tag: {tagFilter}</span>}
+              </div>
+            )}
+          </div>
+
+          {activeFilterCount > 0 && (
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary"
+              onClick={() => {
+                setTypeFilter('all');
+                setBucketFilter('all');
+                setTagFilter('all');
+              }}
+            >
+              Reset
+            </button>
+          )}
+        </div>
+
+        {filtersOpen && (
+          <div id="calendar-filters-panel" className="calendar-filters-row">
+            <select className="input input-sm" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as any)}>
+              <option value="all">All Types</option>
+              <option value="expense">Expenses</option>
+              <option value="income">Income</option>
+              <option value="investment">Investments</option>
+            </select>
+            <select className="input input-sm" value={bucketFilter} onChange={(e) => setBucketFilter(e.target.value)}>
+              <option value="all">All Buckets</option>
+              <option value="none">No Bucket</option>
+              {buckets.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+            <select className="input input-sm" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
+              <option value="all">All Tags</option>
+              {allTags.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {(mode === 'month' || mode === 'week') && (
           <div className="calendar-legend" aria-label="Calendar legend">
             <div className="calendar-legend-row">
@@ -1002,38 +1091,6 @@ export default function CalendarView(props: {
         </div>
 
         <div className="calendar-panel">
-          <div className="calendar-panel-section">
-            <div className="calendar-panel-title">Range summary</div>
-            <div style={{ marginBottom: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
-              {rangeCounts.posted} posted • {rangeCounts.scheduled} scheduled
-              {includeScheduledInStats ? ' • totals include scheduled' : ' • totals exclude scheduled'}
-            </div>
-            <div className="calendar-summary-cards">
-              <div className="calendar-summary-card">
-                <div className="label">Income</div>
-                <div className="value income">{formatCurrency(stats.income)}</div>
-              </div>
-              <div className="calendar-summary-card">
-                <div className="label">Expenses</div>
-                <div className="value expense">{formatCurrency(stats.expenses)}</div>
-              </div>
-              <div className="calendar-summary-card">
-                <div className="label">Investments</div>
-                <div className="value investment">{formatCurrency(stats.investments)}</div>
-              </div>
-              <div className="calendar-summary-card">
-                <div className="label">Net</div>
-                <div className={`value ${stats.balance >= 0 ? 'income' : 'expense'}`}>{formatCurrency(stats.balance)}</div>
-              </div>
-              {mode === 'month' && (
-                <div className="calendar-summary-card">
-                  <div className="label">Avg spend/day</div>
-                  <div className="value">{formatCurrency(avgSpendPerDay)}</div>
-                </div>
-              )}
-            </div>
-          </div>
-
           {stats.bucketBreakdown.length > 0 && (
             <div className="calendar-panel-section">
               <div className="calendar-panel-title">Top buckets (expenses)</div>
