@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
-import { authApi, getAuthToken, setAuthToken, clearAuthToken, setOnUnauthorized } from '../utils/api';
+import { authApi, getAuthToken, setAuthToken, clearAuthToken, setOnUnauthorized, saveCredentials, clearSavedCredentials } from '../utils/api';
+import { saveToStorage, removeFromStorage } from '../utils/storage';
 
 interface User {
   id: string;
@@ -9,7 +10,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
@@ -22,7 +23,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Called on explicit user logout - clears everything including saved credentials
   const handleLogout = useCallback(() => {
+    setToken(null);
+    setUser(null);
+    (async () => {
+      await clearAuthToken();
+      await clearSavedCredentials();
+      await removeFromStorage('remember_me');
+      await removeFromStorage('biometrics_enabled');
+    })();
+  }, []);
+
+  // Called on 401 - keeps saved credentials so biometric re-login still works
+  const handleUnauthorized = useCallback(() => {
     setToken(null);
     setUser(null);
     clearAuthToken();
@@ -30,8 +44,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Set the global unauthorized handler
   useEffect(() => {
-    setOnUnauthorized(handleLogout);
-  }, [handleLogout]);
+    setOnUnauthorized(handleUnauthorized);
+  }, [handleUnauthorized]);
 
   // Load token from SecureStore on mount
   useEffect(() => {
@@ -56,11 +70,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string, rememberMe?: boolean) => {
     const data = await authApi.login(email, password);
     await setAuthToken(data.token);
     setToken(data.token);
     setUser(data.user);
+
+    if (rememberMe) {
+      await saveCredentials(email, password);
+      await saveToStorage('remember_me', true);
+    } else {
+      await clearSavedCredentials();
+      await removeFromStorage('remember_me');
+      await removeFromStorage('biometrics_enabled');
+    }
   }, []);
 
   const register = useCallback(async (email: string, password: string) => {

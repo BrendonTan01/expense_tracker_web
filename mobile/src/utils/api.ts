@@ -4,7 +4,7 @@ import { AppState, Bucket, Transaction, RecurringTransaction, Budget, MonthlySum
 // IMPORTANT: Update this to your actual API base URL
 // For local dev: 'http://YOUR_LOCAL_IP:3001/api'
 // For production: 'https://your-vercel-app.vercel.app/api'
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = 'https://expense-tracker-web-wheat.vercel.app/api';
 
 const TOKEN_KEY = 'auth_token';
 
@@ -28,6 +28,35 @@ export async function setAuthToken(token: string): Promise<void> {
 export async function clearAuthToken(): Promise<void> {
   _cachedToken = null;
   await SecureStore.deleteItemAsync(TOKEN_KEY);
+}
+
+// Saved credentials for "Remember Me" feature
+const SAVED_EMAIL_KEY = 'saved_email';
+const SAVED_PASSWORD_KEY = 'saved_password';
+
+export async function saveCredentials(email: string, password: string): Promise<void> {
+  await SecureStore.setItemAsync(SAVED_EMAIL_KEY, email);
+  await SecureStore.setItemAsync(SAVED_PASSWORD_KEY, password);
+}
+
+export async function getSavedCredentials(): Promise<{ email: string; password: string } | null> {
+  try {
+    const email = await SecureStore.getItemAsync(SAVED_EMAIL_KEY);
+    const password = await SecureStore.getItemAsync(SAVED_PASSWORD_KEY);
+    if (email && password) return { email, password };
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearSavedCredentials(): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(SAVED_EMAIL_KEY);
+    await SecureStore.deleteItemAsync(SAVED_PASSWORD_KEY);
+  } catch {
+    // Ignore errors during cleanup
+  }
 }
 
 async function getAuthHeaders(additionalHeaders: Record<string, string> = {}): Promise<Record<string, string>> {
