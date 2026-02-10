@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, Component, ReactNode, Suspense, lazy } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppState, Transaction, Bucket, RecurringTransaction, Budget, TransactionTemplate } from './types';
 import { generateId } from './utils/storage';
 import { appStateApi, bucketsApi, transactionsApi, recurringApi, budgetsApi } from './utils/api';
@@ -7,7 +8,6 @@ import { useAuth } from './contexts/AuthContext';
 import BucketManager from './components/BucketManager';
 import TransactionForm from './components/TransactionForm';
 import TransactionList from './components/TransactionList';
-import Login from './components/Login';
 import Settings from './components/Settings';
 import DataBackup from './components/DataBackup';
 import TransactionTemplates from './components/TransactionTemplates';
@@ -62,7 +62,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 function App() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [state, setState] = useState<AppState>({
     buckets: [],
     transactions: [],
@@ -658,19 +659,10 @@ function App() {
     return 'buckets'; // default
   };
 
-  // Show loading while checking authentication
-  if (authLoading) {
-    return (
-      <div className="app">
-        <div style={{ padding: '2rem', textAlign: 'center' }}>Loading...</div>
-      </div>
-    );
-  }
-
-  // Show login if not authenticated
-  if (!user) {
-    return <Login />;
-  }
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
 
   if (loading) {
     return (
@@ -720,7 +712,13 @@ function App() {
         <div className="app-header-top">
           <h1>Expense Tracker</h1>
           <div className="app-header-user-info">
-            <span className="user-email">{user.email}</span>
+            <span className="user-email">{user?.email}</span>
+            <button
+              onClick={handleLogout}
+              className="btn-logout"
+            >
+              Log Out
+            </button>
           </div>
         </div>
         <nav className="tabs">

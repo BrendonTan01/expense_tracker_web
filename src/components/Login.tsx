@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { loadFromLocalStorage } from '../utils/storage';
 
 const THEME_STORAGE_KEY = 'theme_preference';
 
 export default function Login() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [isRegister, setIsRegister] = useState(false);
+  const [isRegister, setIsRegister] = useState(() => searchParams.get('register') === 'true');
   const [isDarkMode, setIsDarkMode] = useState(() => {
     // Initialize from localStorage or document class
     const saved = loadFromLocalStorage<string>(THEME_STORAGE_KEY, 'light');
@@ -46,6 +49,7 @@ export default function Login() {
       } else {
         await login(email, password);
       }
+      navigate('/app');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -229,6 +233,24 @@ export default function Login() {
               </button>
             </>
           )}
+        </div>
+
+        <div style={{
+          textAlign: 'center',
+          marginTop: '1.25rem',
+          paddingTop: '1.25rem',
+          borderTop: '1px solid var(--border-color)',
+        }}>
+          <Link
+            to="/"
+            style={{
+              fontSize: '0.85rem',
+              color: 'var(--text-muted)',
+              textDecoration: 'none',
+            }}
+          >
+            &larr; Back to home
+          </Link>
         </div>
       </div>
     </div>

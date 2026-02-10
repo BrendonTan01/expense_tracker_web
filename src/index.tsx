@@ -1,10 +1,45 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import App from './App.tsx'
-import { AuthProvider } from './contexts/AuthContext'
+import LandingPage from './components/LandingPage.tsx'
+import Login from './components/Login.tsx'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import './index.css'
 import { registerSW } from 'virtual:pwa-register'
+
+// Route guard: redirects to /login if not authenticated
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="app">
+        <div style={{ padding: '2rem', textAlign: 'center' }}>Loading...</div>
+      </div>
+    );
+  }
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return <>{children}</>;
+}
+
+// Route guard: redirects to /app if already authenticated
+function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="app">
+        <div style={{ padding: '2rem', textAlign: 'center' }}>Loading...</div>
+      </div>
+    );
+  }
+  if (user) {
+    return <Navigate to="/app" replace />;
+  }
+  return <>{children}</>;
+}
 
 // Root-level error boundary wrapper
 class RootErrorBoundary extends React.Component<
@@ -77,7 +112,29 @@ ReactDOM.createRoot(rootElement).render(
     <RootErrorBoundary>
       <ThemeProvider>
         <AuthProvider>
-          <App />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route
+                path="/login"
+                element={
+                  <PublicOnlyRoute>
+                    <Login />
+                  </PublicOnlyRoute>
+                }
+              />
+              <Route
+                path="/app"
+                element={
+                  <ProtectedRoute>
+                    <App />
+                  </ProtectedRoute>
+                }
+              />
+              {/* Catch-all: redirect unknown routes to landing */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </BrowserRouter>
         </AuthProvider>
       </ThemeProvider>
     </RootErrorBoundary>
