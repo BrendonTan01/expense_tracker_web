@@ -5,6 +5,7 @@
 }
 
 :root {
+  color-scheme: light;
   --primary-color: #6366f1;
   --primary-dark: #4f46e5;
   --primary-light: #818cf8;
@@ -362,6 +363,8 @@ body {
   border: 1px solid var(--border-color);
   border-radius: 4px;
   font-size: 14px;
+  background: var(--card-bg);
+  color: var(--text-color);
   transition: border-color 0.2s;
 }
 
@@ -1214,6 +1217,7 @@ td {
 
 /* Dark Mode */
 .dark-mode {
+  color-scheme: dark;
   --primary-color: #818cf8;
   --primary-dark: #6366f1;
   --primary-light: #a5b4fc;
