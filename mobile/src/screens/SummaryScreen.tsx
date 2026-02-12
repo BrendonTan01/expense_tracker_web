@@ -235,6 +235,11 @@ export default function SummaryScreen() {
                     })}
                     radius={80}
                     innerRadius={50}
+                    backgroundColor={theme.colors.surface}
+                    innerCircleColor={theme.colors.surface}
+                    innerCircleBorderColor={theme.colors.border}
+                    textColor={theme.colors.text}
+                    strokeColor={theme.colors.border}
                     centerLabelComponent={() => (
                       <View style={{ alignItems: 'center' }}>
                         <Text style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary }}>Total</Text>

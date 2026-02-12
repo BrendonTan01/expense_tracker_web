@@ -6,6 +6,7 @@ import BudgetsScreen from '../screens/BudgetsScreen';
 import RecurringScreen from '../screens/RecurringScreen';
 import ReflectionsScreen from '../screens/ReflectionsScreen';
 import BackupScreen from '../screens/BackupScreen';
+import TemplatesScreen from '../screens/TemplatesScreen';
 import { useTheme } from '../contexts/ThemeContext';
 
 const Stack = createNativeStackNavigator();
@@ -24,6 +25,7 @@ export default function MoreStack() {
       }}
     >
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+      <Stack.Screen name="Templates" component={TemplatesScreen} options={{ title: 'Transaction Templates' }} />
       <Stack.Screen name="Buckets" component={BucketsScreen} options={{ title: 'Buckets' }} />
       <Stack.Screen name="Budgets" component={BudgetsScreen} options={{ title: 'Budgets' }} />
       <Stack.Screen name="Recurring" component={RecurringScreen} options={{ title: 'Recurring' }} />

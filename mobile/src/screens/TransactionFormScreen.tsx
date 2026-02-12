@@ -9,24 +9,46 @@ import { useAppState } from '../contexts/AppStateContext';
 import { todayIsoLocal, parseIsoDateLocal, formatIsoDateLocal, formatDate } from '../utils/dateHelpers';
 import { generateId } from '../utils/storage';
 import { hapticSuccess, hapticError, hapticSelection } from '../utils/haptics';
-import { Transaction } from '../types';
+import { Transaction, TransactionTemplate } from '../types';
+import TransactionTemplatesSection from '../components/TransactionTemplatesSection';
 
 export default function TransactionFormScreen({ navigation, route }: any) {
   const { theme } = useTheme();
   const { state, addTransaction, updateTransaction } = useAppState();
   const editTransaction: Transaction | undefined = route.params?.transaction;
+  const templateFromNav: TransactionTemplate | undefined = route.params?.template;
   const isEditing = !!editTransaction;
 
-  const [type, setType] = useState<'expense' | 'income' | 'investment'>(editTransaction?.type || 'expense');
-  const [amount, setAmount] = useState(editTransaction ? editTransaction.amount.toString() : '');
-  const [description, setDescription] = useState(editTransaction?.description || '');
-  const [bucketId, setBucketId] = useState<string | undefined>(editTransaction?.bucketId);
+  const [type, setType] = useState<'expense' | 'income' | 'investment'>(editTransaction?.type || templateFromNav?.type || 'expense');
+  const [amount, setAmount] = useState(editTransaction ? editTransaction.amount.toString() : (templateFromNav?.amount?.toString() ?? ''));
+  const [description, setDescription] = useState(editTransaction?.description || templateFromNav?.description || '');
+  const [bucketId, setBucketId] = useState<string | undefined>(editTransaction?.bucketId ?? templateFromNav?.bucketId);
   const [date, setDate] = useState(editTransaction?.date || todayIsoLocal());
-  const [tags, setTags] = useState<string[]>(editTransaction?.tags || []);
+  const [tags, setTags] = useState<string[]>(editTransaction?.tags || templateFromNav?.tags || []);
   const [tagInput, setTagInput] = useState('');
-  const [notes, setNotes] = useState(editTransaction?.notes || '');
+  const [notes, setNotes] = useState(editTransaction?.notes || templateFromNav?.notes || '');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (templateFromNav) {
+      setType(templateFromNav.type);
+      setAmount(templateFromNav.amount?.toString() ?? '');
+      setDescription(templateFromNav.description);
+      setBucketId(templateFromNav.bucketId);
+      setTags(templateFromNav.tags || []);
+      setNotes(templateFromNav.notes || '');
+    }
+  }, [templateFromNav?.id]);
+
+  const handleUseTemplate = (template: TransactionTemplate) => {
+    setType(template.type);
+    setAmount(template.amount?.toString() ?? '');
+    setDescription(template.description);
+    setBucketId(template.bucketId);
+    setTags(template.tags || []);
+    setNotes(template.notes || '');
+  };
 
   const styles = createStyles(theme);
 
@@ -95,6 +117,14 @@ export default function TransactionFormScreen({ navigation, route }: any) {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        {/* Templates (when creating new only) */}
+        {!isEditing && (
+          <TransactionTemplatesSection
+            buckets={state.buckets}
+            onUseTemplate={handleUseTemplate}
+          />
+        )}
+
         {/* Type Selector */}
         <View style={styles.typeSelector}>
           {(['expense', 'income', 'investment'] as const).map(t => (

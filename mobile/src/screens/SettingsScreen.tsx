@@ -165,6 +165,10 @@ export default function SettingsScreen({ navigation }: any) {
       {/* Manage */}
       <Text style={styles.sectionHeader}>Manage</Text>
       <View style={styles.card}>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Templates')}>
+          <Text style={styles.navItemText}>Transaction Templates</Text>
+          <Text style={styles.navArrow}>›</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Buckets')}>
           <Text style={styles.navItemText}>Buckets</Text>
           <Text style={styles.navArrow}>›</Text>
