@@ -4,6 +4,7 @@ import {
   TextInput, Alert, ActivityIndicator,
 } from 'react-native';
 import { useTheme, ThemePreference } from '../contexts/ThemeContext';
+import { hapticSelection } from '../utils/haptics';
 import { useLayout, DEFAULT_DASHBOARD_SECTIONS, DEFAULT_TABS } from '../contexts/LayoutContext';
 import { useAuth } from '../contexts/AuthContext';
 import { ACCENT_PALETTES } from '../theme/colors';
@@ -68,7 +69,7 @@ export default function SettingsScreen({ navigation }: any) {
             <TouchableOpacity
               key={mode}
               style={[styles.optionBtn, prefs.mode === mode && styles.optionBtnActive]}
-              onPress={() => setMode(mode)}
+              onPress={() => { hapticSelection(); setMode(mode); }}
             >
               <Text style={[styles.optionBtnText, prefs.mode === mode && styles.optionBtnTextActive]}>
                 {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -88,7 +89,7 @@ export default function SettingsScreen({ navigation }: any) {
                 { backgroundColor: palette.primary },
                 prefs.accentId === palette.id && styles.colorCircleActive,
               ]}
-              onPress={() => setAccent(palette.id)}
+              onPress={() => { hapticSelection(); setAccent(palette.id); }}
             />
           ))}
         </View>
@@ -100,7 +101,7 @@ export default function SettingsScreen({ navigation }: any) {
             <TouchableOpacity
               key={opt.key}
               style={[styles.optionBtn, prefs.fontSizePreset === opt.key && styles.optionBtnActive]}
-              onPress={() => setFontSizePreset(opt.key)}
+              onPress={() => { hapticSelection(); setFontSizePreset(opt.key); }}
             >
               <Text style={[styles.optionBtnText, prefs.fontSizePreset === opt.key && styles.optionBtnTextActive]}>
                 {opt.label}
@@ -114,7 +115,7 @@ export default function SettingsScreen({ navigation }: any) {
           <Text style={styles.switchLabel}>Compact Mode</Text>
           <Switch
             value={prefs.compact}
-            onValueChange={setCompact}
+            onValueChange={(v) => { hapticSelection(); setCompact(v); }}
             trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
             thumbColor="#fff"
           />
@@ -129,7 +130,7 @@ export default function SettingsScreen({ navigation }: any) {
             <Text style={styles.switchLabel}>{section.label}</Text>
             <Switch
               value={section.visible}
-              onValueChange={() => toggleDashboardSection(section.id)}
+              onValueChange={() => { hapticSelection(); toggleDashboardSection(section.id); }}
               trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
               thumbColor="#fff"
             />
@@ -145,7 +146,7 @@ export default function SettingsScreen({ navigation }: any) {
             <Text style={styles.switchLabel}>{tab.label}</Text>
             <Switch
               value={tab.visible}
-              onValueChange={() => toggleTab(tab.id)}
+              onValueChange={() => { hapticSelection(); toggleTab(tab.id); }}
               trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
               thumbColor="#fff"
               disabled={tab.id === 'add' || tab.id === 'summary'}
@@ -153,6 +154,7 @@ export default function SettingsScreen({ navigation }: any) {
           </View>
         ))}
         <TouchableOpacity style={styles.resetBtn} onPress={() => {
+          hapticSelection();
           Alert.alert('Reset Layout', 'Reset dashboard and tabs to defaults?', [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Reset', onPress: resetLayout },
@@ -165,23 +167,23 @@ export default function SettingsScreen({ navigation }: any) {
       {/* Manage */}
       <Text style={styles.sectionHeader}>Manage</Text>
       <View style={styles.card}>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Buckets')}>
+        <TouchableOpacity style={styles.navItem} onPress={() => { hapticSelection(); navigation.navigate('Buckets'); }}>
           <Text style={styles.navItemText}>Buckets</Text>
           <Text style={styles.navArrow}>›</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Recurring')}>
+        <TouchableOpacity style={styles.navItem} onPress={() => { hapticSelection(); navigation.navigate('Recurring'); }}>
           <Text style={styles.navItemText}>Recurring Transactions</Text>
           <Text style={styles.navArrow}>›</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Budgets')}>
+        <TouchableOpacity style={styles.navItem} onPress={() => { hapticSelection(); navigation.navigate('Budgets'); }}>
           <Text style={styles.navItemText}>Budgets</Text>
           <Text style={styles.navArrow}>›</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Reflections')}>
+        <TouchableOpacity style={styles.navItem} onPress={() => { hapticSelection(); navigation.navigate('Reflections'); }}>
           <Text style={styles.navItemText}>Reflections</Text>
           <Text style={styles.navArrow}>›</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.navItem, { borderBottomWidth: 0 }]} onPress={() => navigation.navigate('Backup')}>
+        <TouchableOpacity style={[styles.navItem, { borderBottomWidth: 0 }]} onPress={() => { hapticSelection(); navigation.navigate('Backup'); }}>
           <Text style={styles.navItemText}>Backup & Restore</Text>
           <Text style={styles.navArrow}>›</Text>
         </TouchableOpacity>
@@ -214,13 +216,13 @@ export default function SettingsScreen({ navigation }: any) {
         />
         <TouchableOpacity
           style={[styles.changePasswordBtn, changingPassword && { opacity: 0.6 }]}
-          onPress={handleChangePassword}
+          onPress={() => { hapticSelection(); handleChangePassword(); }}
           disabled={changingPassword}
         >
           {changingPassword ? <ActivityIndicator color="#fff" /> : <Text style={styles.changePasswordBtnText}>Change Password</Text>}
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+        <TouchableOpacity style={styles.logoutBtn} onPress={() => { hapticSelection(); handleLogout(); }}>
           <Text style={styles.logoutBtnText}>Logout</Text>
         </TouchableOpacity>
       </View>

@@ -6,6 +6,7 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
 import { generateId } from '../utils/storage';
+import { hapticSelection } from '../utils/haptics';
 import { Bucket } from '../types';
 
 const COLORS = [
@@ -69,11 +70,11 @@ export default function BucketsScreen() {
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
           <View style={styles.item}>
-            <TouchableOpacity style={styles.itemContent} onPress={() => openEdit(item)}>
+            <TouchableOpacity style={styles.itemContent} onPress={() => { hapticSelection(); openEdit(item); }}>
               <View style={[styles.colorDot, { backgroundColor: item.color || COLORS[0] }]} />
               <Text style={styles.itemName}>{item.name}</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleDelete(item)} style={styles.deleteBtn}>
+            <TouchableOpacity onPress={() => { hapticSelection(); handleDelete(item); }} style={styles.deleteBtn}>
               <Text style={styles.deleteBtnText}>Delete</Text>
             </TouchableOpacity>
           </View>
@@ -85,7 +86,7 @@ export default function BucketsScreen() {
           </View>
         }
         ListHeaderComponent={
-          <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
+          <TouchableOpacity style={styles.addBtn} onPress={() => { hapticSelection(); openAdd(); }}>
             <Text style={styles.addBtnText}>+ Add Bucket</Text>
           </TouchableOpacity>
         }
@@ -115,17 +116,17 @@ export default function BucketsScreen() {
                   <TouchableOpacity
                     key={c}
                     style={[styles.colorOption, { backgroundColor: c }, color === c && styles.colorOptionSelected]}
-                    onPress={() => setColor(c)}
+                    onPress={() => { hapticSelection(); setColor(c); }}
                   />
                 ))}
               </View>
             </View>
 
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => { hapticSelection(); setModalVisible(false); }}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+              <TouchableOpacity style={styles.saveBtn} onPress={() => { hapticSelection(); handleSave(); }}>
                 <Text style={styles.saveBtnText}>Save</Text>
               </TouchableOpacity>
             </View>

@@ -174,7 +174,7 @@ export default function TransactionFormScreen({ navigation, route }: any) {
                 <TouchableOpacity
                   key={b.id}
                   style={[styles.bucketChip, bucketId === b.id && { backgroundColor: (b.color || theme.colors.primary) + '20', borderColor: b.color || theme.colors.primary }]}
-                  onPress={() => setBucketId(b.id)}
+                  onPress={() => { hapticSelection(); setBucketId(b.id); }}
                 >
                   <View style={[styles.bucketDot, { backgroundColor: b.color || theme.colors.primary }]} />
                   <Text style={[styles.bucketChipText, bucketId === b.id && { color: b.color || theme.colors.primary, fontWeight: '600' }]}>
@@ -189,7 +189,7 @@ export default function TransactionFormScreen({ navigation, route }: any) {
         {/* Date */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Date</Text>
-          <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDatePicker(true)}>
+          <TouchableOpacity style={styles.dateBtn} onPress={() => { hapticSelection(); setShowDatePicker(true); }}>
             <Text style={styles.dateBtnText}>{formatDate(date)}</Text>
           </TouchableOpacity>
           {showDatePicker && (
@@ -216,14 +216,14 @@ export default function TransactionFormScreen({ navigation, route }: any) {
               onSubmitEditing={addTag}
               returnKeyType="done"
             />
-            <TouchableOpacity style={styles.addTagBtn} onPress={addTag}>
+            <TouchableOpacity style={styles.addTagBtn} onPress={() => { hapticSelection(); addTag(); }}>
               <Text style={styles.addTagBtnText}>Add</Text>
             </TouchableOpacity>
           </View>
           {tags.length > 0 && (
             <View style={styles.tagsWrap}>
               {tags.map(tag => (
-                <TouchableOpacity key={tag} style={styles.tagChip} onPress={() => removeTag(tag)}>
+                <TouchableOpacity key={tag} style={styles.tagChip} onPress={() => { hapticSelection(); removeTag(tag); }}>
                   <Text style={styles.tagChipText}>{tag} ×</Text>
                 </TouchableOpacity>
               ))}
@@ -248,7 +248,7 @@ export default function TransactionFormScreen({ navigation, route }: any) {
         {/* Save Button */}
         <TouchableOpacity
           style={[styles.saveBtn, loading && { opacity: 0.6 }]}
-          onPress={handleSave}
+          onPress={() => { hapticSelection(); handleSave(); }}
           disabled={loading}
         >
           {loading ? (

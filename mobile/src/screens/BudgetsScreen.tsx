@@ -7,6 +7,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
 import { formatCurrency } from '../utils/dateHelpers';
 import { generateId } from '../utils/storage';
+import { hapticSelection } from '../utils/haptics';
 import { Budget } from '../types';
 
 export default function BudgetsScreen() {
@@ -134,7 +135,7 @@ export default function BudgetsScreen() {
               const spent = getSpent(b.bucketId, b.period, b.year, b.month);
               const pct = b.amount > 0 ? (spent / b.amount) * 100 : 0;
               return (
-                <TouchableOpacity key={b.id} style={styles.budgetRow} onPress={() => openEdit(b)} onLongPress={() => handleDelete(b)}>
+                <TouchableOpacity key={b.id} style={styles.budgetRow} onPress={() => { hapticSelection(); openEdit(b); }} onLongPress={() => handleDelete(b)}>
                   <View style={styles.budgetInfo}>
                     <Text style={styles.budgetLabel}>
                       {b.period === 'monthly' ? `${monthNames[(b.month || 1) - 1]} ${b.year}` : `${b.year} (Yearly)`}
@@ -159,7 +160,7 @@ export default function BudgetsScreen() {
           </View>
         }
         ListHeaderComponent={
-          <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
+          <TouchableOpacity style={styles.addBtn} onPress={() => { hapticSelection(); openAdd(); }}>
             <Text style={styles.addBtnText}>+ Add Budget</Text>
           </TouchableOpacity>
         }
@@ -179,7 +180,7 @@ export default function BudgetsScreen() {
                       <TouchableOpacity
                         key={b.id}
                         style={[styles.bucketChip, selectedBucketId === b.id && { backgroundColor: (b.color || theme.colors.primary) + '20', borderColor: b.color || theme.colors.primary }]}
-                        onPress={() => setSelectedBucketId(b.id)}
+                        onPress={() => { hapticSelection(); setSelectedBucketId(b.id); }}
                       >
                         <Text style={[styles.bucketChipText, selectedBucketId === b.id && { color: b.color || theme.colors.primary }]}>{b.name}</Text>
                       </TouchableOpacity>
@@ -206,7 +207,7 @@ export default function BudgetsScreen() {
                     <Text style={styles.label}>Period</Text>
                     <View style={styles.periodRow}>
                       {(['monthly', 'yearly'] as const).map(p => (
-                        <TouchableOpacity key={p} style={[styles.periodBtn, period === p && styles.periodBtnActive]} onPress={() => setPeriod(p)}>
+                        <TouchableOpacity key={p} style={[styles.periodBtn, period === p && styles.periodBtnActive]} onPress={() => { hapticSelection(); setPeriod(p); }}>
                           <Text style={[styles.periodBtnText, period === p && styles.periodBtnTextActive]}>{p.charAt(0).toUpperCase() + p.slice(1)}</Text>
                         </TouchableOpacity>
                       ))}
@@ -214,7 +215,7 @@ export default function BudgetsScreen() {
                   </View>
 
                   {period === 'monthly' && (
-                    <TouchableOpacity style={styles.checkRow} onPress={() => setApplyAllMonths(!applyAllMonths)}>
+                    <TouchableOpacity style={styles.checkRow} onPress={() => { hapticSelection(); setApplyAllMonths(!applyAllMonths); }}>
                       <View style={[styles.checkbox, applyAllMonths && styles.checkboxChecked]} />
                       <Text style={styles.checkLabel}>Apply to all months</Text>
                     </TouchableOpacity>
@@ -223,10 +224,10 @@ export default function BudgetsScreen() {
               )}
 
               <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => { hapticSelection(); setModalVisible(false); }}>
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+                <TouchableOpacity style={styles.saveBtn} onPress={() => { hapticSelection(); handleSave(); }}>
                   <Text style={styles.saveBtnText}>Save</Text>
                 </TouchableOpacity>
               </View>

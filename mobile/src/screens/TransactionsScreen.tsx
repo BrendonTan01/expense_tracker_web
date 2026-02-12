@@ -126,6 +126,7 @@ export default function TransactionsScreen({ navigation }: any) {
       <TouchableOpacity
         style={[styles.txnItem, isSelected && styles.txnItemSelected]}
         onPress={() => {
+          hapticSelection();
           if (selectionMode) {
             toggleSelect(item.id);
           } else {
@@ -166,7 +167,7 @@ export default function TransactionsScreen({ navigation }: any) {
             {item.type === 'income' ? '+' : '-'}{formatCurrency(item.amount)}
           </Text>
           {!selectionMode && (
-            <TouchableOpacity onPress={() => handleDelete(item)} style={styles.deleteBtn}>
+            <TouchableOpacity onPress={() => { hapticSelection(); handleDelete(item); }} style={styles.deleteBtn}>
               <Text style={styles.deleteBtnText}>Delete</Text>
             </TouchableOpacity>
           )}
@@ -203,12 +204,12 @@ export default function TransactionsScreen({ navigation }: any) {
       </View>
 
       <View style={styles.sortBar}>
-        <TouchableOpacity onPress={() => { setSortField('date'); setSortDir(prev => sortField === 'date' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'); }}>
+        <TouchableOpacity onPress={() => { hapticSelection(); setSortField('date'); setSortDir(prev => sortField === 'date' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'); }}>
           <Text style={[styles.sortBtn, sortField === 'date' && styles.sortBtnActive]}>
             Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => { setSortField('amount'); setSortDir(prev => sortField === 'amount' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'); }}>
+        <TouchableOpacity onPress={() => { hapticSelection(); setSortField('amount'); setSortDir(prev => sortField === 'amount' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'); }}>
           <Text style={[styles.sortBtn, sortField === 'amount' && styles.sortBtnActive]}>
             Amount {sortField === 'amount' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
           </Text>
@@ -219,10 +220,10 @@ export default function TransactionsScreen({ navigation }: any) {
       {selectionMode && (
         <View style={styles.selectionBar}>
           <Text style={styles.selectionText}>{selectedIds.size} selected</Text>
-          <TouchableOpacity onPress={handleDeleteSelected} style={styles.selectionDeleteBtn}>
+          <TouchableOpacity onPress={() => { hapticSelection(); handleDeleteSelected(); }} style={styles.selectionDeleteBtn}>
             <Text style={styles.selectionDeleteText}>Delete Selected</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { setSelectionMode(false); setSelectedIds(new Set()); }} style={styles.selectionCancelBtn}>
+          <TouchableOpacity onPress={() => { hapticSelection(); setSelectionMode(false); setSelectedIds(new Set()); }} style={styles.selectionCancelBtn}>
             <Text style={styles.selectionCancelText}>Cancel</Text>
           </TouchableOpacity>
         </View>

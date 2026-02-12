@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { hapticLight } from '../utils/haptics';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../contexts/ThemeContext';
@@ -141,11 +142,12 @@ export default function MainTabs() {
       {visibleTabs.map(tab => {
         switch (tab.id) {
           case 'summary':
-            return (
+              return (
               <Tab.Screen
                 key="summary"
                 name="SummaryTab"
                 component={SummaryScreen}
+                listeners={{ tabPress: () => hapticLight() }}
                 options={{
                   tabBarLabel: 'Summary',
                   headerShown: true,
@@ -164,6 +166,7 @@ export default function MainTabs() {
                 key="calendar"
                 name="CalendarTab"
                 component={CalendarStackScreen}
+                listeners={{ tabPress: () => hapticLight() }}
                 options={{
                   tabBarLabel: 'Calendar',
                   tabBarIcon: ({ color, size }) => <TabIcon name="calendar" color={color} size={size} />,
@@ -183,6 +186,7 @@ export default function MainTabs() {
                 listeners={({ navigation }) => ({
                   tabPress: (e) => {
                     e.preventDefault();
+                    hapticLight();
                     navigation.navigate('TransactionsTab', { screen: 'TransactionForm' });
                   },
                 })}
@@ -194,6 +198,7 @@ export default function MainTabs() {
                 key="transactions"
                 name="TransactionsTab"
                 component={TransactionsStackScreen}
+                listeners={{ tabPress: () => hapticLight() }}
                 options={{
                   tabBarLabel: 'Transactions',
                   tabBarIcon: ({ color, size }) => <TabIcon name="transactions" color={color} size={size} />,
@@ -206,6 +211,7 @@ export default function MainTabs() {
                 key="more"
                 name="MoreTab"
                 component={MoreStack}
+                listeners={{ tabPress: () => hapticLight() }}
                 options={{
                   tabBarLabel: 'More',
                   tabBarIcon: ({ color, size }) => <TabIcon name="more" color={color} size={size} />,

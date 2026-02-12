@@ -7,6 +7,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
 import { summariesApi } from '../utils/api';
 import { formatCurrency } from '../utils/dateHelpers';
+import { hapticSelection } from '../utils/haptics';
 import { generateId } from '../utils/storage';
 import { MonthlySummary, YearlySummary } from '../types';
 
@@ -105,7 +106,7 @@ export default function ReflectionsScreen() {
     return (
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <TouchableOpacity onPress={() => setViewMode('year')} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => { hapticSelection(); setViewMode('year'); }} style={styles.backBtn}>
             <Text style={styles.backBtnText}>Back to {selectedYear}</Text>
           </TouchableOpacity>
 
@@ -141,7 +142,7 @@ export default function ReflectionsScreen() {
           />
           <TouchableOpacity
             style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-            onPress={() => handleSaveSummary('monthly')}
+            onPress={() => { hapticSelection(); handleSaveSummary('monthly'); }}
             disabled={saving}
           >
             <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save Reflection'}</Text>
@@ -157,7 +158,7 @@ export default function ReflectionsScreen() {
 
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-        <TouchableOpacity onPress={() => setViewMode('years')} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => { hapticSelection(); setViewMode('years'); }} style={styles.backBtn}>
           <Text style={styles.backBtnText}>Back to all years</Text>
         </TouchableOpacity>
 
@@ -193,7 +194,7 @@ export default function ReflectionsScreen() {
         />
         <TouchableOpacity
           style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-          onPress={() => handleSaveSummary('yearly')}
+          onPress={() => { hapticSelection(); handleSaveSummary('yearly'); }}
           disabled={saving}
         >
           <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save Reflection'}</Text>
@@ -207,7 +208,7 @@ export default function ReflectionsScreen() {
             <TouchableOpacity
               key={i}
               style={styles.monthItem}
-              onPress={() => { setSelectedMonth(i + 1); setEditText(''); setEditId(null); setViewMode('month'); }}
+              onPress={() => { hapticSelection(); setSelectedMonth(i + 1); setEditText(''); setEditId(null); setViewMode('month'); }}
             >
               <View>
                 <Text style={styles.monthName}>{name}</Text>
@@ -237,7 +238,7 @@ export default function ReflectionsScreen() {
           return (
             <TouchableOpacity
               style={styles.yearItem}
-              onPress={() => { setSelectedYear(year); setEditText(''); setEditId(null); setViewMode('year'); }}
+              onPress={() => { hapticSelection(); setSelectedYear(year); setEditText(''); setEditId(null); setViewMode('year'); }}
             >
               <View>
                 <Text style={styles.yearTitle}>{year}</Text>

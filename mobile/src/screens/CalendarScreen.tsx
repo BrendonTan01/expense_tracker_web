@@ -5,7 +5,8 @@ import {
 import { Calendar } from 'react-native-calendars';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
-import { formatCurrency, formatDate, todayIsoLocal, startOfMonthIsoLocal, endOfMonthIsoLocal } from '../utils/dateHelpers';
+import { formatCurrency, formatDate, todayIsoLocal } from '../utils/dateHelpers';
+import { hapticLight, hapticSelection } from '../utils/haptics';
 import { Transaction } from '../types';
 
 type CalendarMode = 'month' | 'day';
@@ -123,7 +124,20 @@ export default function CalendarScreen({ navigation }: any) {
       <Calendar
         markingType="custom"
         markedDates={markedDates}
-        onDayPress={(day: any) => setSelectedDate(day.dateString)}
+        enableSwipeMonths
+        onMonthChange={() => hapticLight()}
+        onPressArrowLeft={(goToPrevMonth) => {
+          hapticLight();
+          goToPrevMonth();
+        }}
+        onPressArrowRight={(goToNextMonth) => {
+          hapticLight();
+          goToNextMonth();
+        }}
+        onDayPress={(day: any) => {
+          hapticSelection();
+          setSelectedDate(day.dateString);
+        }}
         theme={{
           calendarBackground: theme.colors.surface,
           textSectionTitleColor: theme.colors.textSecondary,
@@ -171,7 +185,10 @@ export default function CalendarScreen({ navigation }: any) {
             <TouchableOpacity
               key={t.id}
               style={styles.txnItem}
-              onPress={() => navigation.navigate('TransactionForm', { transaction: t })}
+              onPress={() => {
+                hapticSelection();
+                navigation.navigate('TransactionForm', { transaction: t });
+              }}
             >
               <View style={[styles.typeDot, { backgroundColor: typeColor(t.type) }]} />
               <View style={styles.txnInfo}>

@@ -8,6 +8,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
 import { formatCurrency, formatDate, todayIsoLocal, parseIsoDateLocal, formatIsoDateLocal, getNextOccurrence } from '../utils/dateHelpers';
 import { generateId } from '../utils/storage';
+import { hapticSelection } from '../utils/haptics';
 import { RecurringTransaction, RecurringFrequency } from '../types';
 
 const FREQUENCIES: { key: RecurringFrequency; label: string }[] = [
@@ -128,7 +129,7 @@ export default function RecurringScreen() {
           const nextOccurrence = status === 'active' ? getNextOccurrence(item.frequency, item.startDate, item.lastApplied) : null;
           const bucket = state.buckets.find(b => b.id === item.transaction.bucketId);
           return (
-            <TouchableOpacity style={styles.item} onPress={() => openEdit(item)} onLongPress={() => handleDelete(item)}>
+            <TouchableOpacity style={styles.item} onPress={() => { hapticSelection(); openEdit(item); }} onLongPress={() => handleDelete(item)}>
               <View style={styles.itemHeader}>
                 <View style={[styles.statusDot, { backgroundColor: statusColor(status) }]} />
                 <Text style={styles.itemDesc} numberOfLines={1}>{item.transaction.description}</Text>
@@ -154,7 +155,7 @@ export default function RecurringScreen() {
           </View>
         }
         ListHeaderComponent={
-          <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
+          <TouchableOpacity style={styles.addBtn} onPress={() => { hapticSelection(); openAdd(); }}>
             <Text style={styles.addBtnText}>+ Add Recurring Transaction</Text>
           </TouchableOpacity>
         }
@@ -169,7 +170,7 @@ export default function RecurringScreen() {
               {/* Type */}
               <View style={styles.typeRow}>
                 {(['expense', 'income', 'investment'] as const).map(t => (
-                  <TouchableOpacity key={t} style={[styles.typeBtn, type === t && { backgroundColor: typeColor(t) }]} onPress={() => setType(t)}>
+                  <TouchableOpacity key={t} style={[styles.typeBtn, type === t && { backgroundColor: typeColor(t) }]} onPress={() => { hapticSelection(); setType(t); }}>
                     <Text style={[styles.typeBtnText, type === t && { color: '#fff' }]}>{t.charAt(0).toUpperCase() + t.slice(1)}</Text>
                   </TouchableOpacity>
                 ))}
@@ -189,7 +190,7 @@ export default function RecurringScreen() {
                   <Text style={styles.label}>Bucket</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     {state.buckets.map(b => (
-                      <TouchableOpacity key={b.id} style={[styles.bucketChip, bucketId === b.id && { backgroundColor: (b.color || theme.colors.primary) + '20', borderColor: b.color || theme.colors.primary }]} onPress={() => setBucketId(b.id)}>
+                      <TouchableOpacity key={b.id} style={[styles.bucketChip, bucketId === b.id && { backgroundColor: (b.color || theme.colors.primary) + '20', borderColor: b.color || theme.colors.primary }]} onPress={() => { hapticSelection(); setBucketId(b.id); }}>
                         <Text style={[styles.bucketChipText, bucketId === b.id && { color: b.color || theme.colors.primary }]}>{b.name}</Text>
                       </TouchableOpacity>
                     ))}
@@ -201,7 +202,7 @@ export default function RecurringScreen() {
                 <Text style={styles.label}>Frequency</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   {FREQUENCIES.map(f => (
-                    <TouchableOpacity key={f.key} style={[styles.freqChip, frequency === f.key && styles.freqChipActive]} onPress={() => setFrequency(f.key)}>
+                    <TouchableOpacity key={f.key} style={[styles.freqChip, frequency === f.key && styles.freqChipActive]} onPress={() => { hapticSelection(); setFrequency(f.key); }}>
                       <Text style={[styles.freqChipText, frequency === f.key && styles.freqChipTextActive]}>{f.label}</Text>
                     </TouchableOpacity>
                   ))}
@@ -210,7 +211,7 @@ export default function RecurringScreen() {
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Start Date</Text>
-                <TouchableOpacity style={styles.dateBtn} onPress={() => setShowStartPicker(true)}>
+                <TouchableOpacity style={styles.dateBtn} onPress={() => { hapticSelection(); setShowStartPicker(true); }}>
                   <Text style={styles.dateBtnText}>{formatDate(startDate)}</Text>
                 </TouchableOpacity>
                 {showStartPicker && (
@@ -218,7 +219,7 @@ export default function RecurringScreen() {
                 )}
               </View>
 
-              <TouchableOpacity style={styles.checkRow} onPress={() => setHasEndDate(!hasEndDate)}>
+              <TouchableOpacity style={styles.checkRow} onPress={() => { hapticSelection(); setHasEndDate(!hasEndDate); }}>
                 <View style={[styles.checkbox, hasEndDate && styles.checkboxChecked]} />
                 <Text style={styles.checkLabel}>Set end date</Text>
               </TouchableOpacity>
@@ -226,7 +227,7 @@ export default function RecurringScreen() {
               {hasEndDate && (
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>End Date</Text>
-                  <TouchableOpacity style={styles.dateBtn} onPress={() => setShowEndPicker(true)}>
+                  <TouchableOpacity style={styles.dateBtn} onPress={() => { hapticSelection(); setShowEndPicker(true); }}>
                     <Text style={styles.dateBtnText}>{endDate ? formatDate(endDate) : 'Select date'}</Text>
                   </TouchableOpacity>
                   {showEndPicker && (
@@ -236,10 +237,10 @@ export default function RecurringScreen() {
               )}
 
               <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => { hapticSelection(); setModalVisible(false); }}>
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+                <TouchableOpacity style={styles.saveBtn} onPress={() => { hapticSelection(); handleSave(); }}>
                   <Text style={styles.saveBtnText}>Save</Text>
                 </TouchableOpacity>
               </View>

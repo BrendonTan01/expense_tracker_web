@@ -7,6 +7,7 @@ import * as FileSystem from 'expo-file-system';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
 import { downloadBackup, importFromJSON } from '../utils/backup';
+import { hapticSelection } from '../utils/haptics';
 import { bucketsApi, transactionsApi, recurringApi, budgetsApi } from '../utils/api';
 
 export default function BackupScreen() {
@@ -91,7 +92,7 @@ export default function BackupScreen() {
           </Text>
           <TouchableOpacity
             style={[styles.exportBtn, exporting && { opacity: 0.6 }]}
-            onPress={handleExport}
+            onPress={() => { hapticSelection(); handleExport(); }}
             disabled={exporting}
           >
             {exporting ? <ActivityIndicator color="#fff" /> : <Text style={styles.exportBtnText}>Export Backup</Text>}
@@ -105,7 +106,7 @@ export default function BackupScreen() {
           </Text>
           <TouchableOpacity
             style={[styles.importBtn, importing && { opacity: 0.6 }]}
-            onPress={handleImport}
+            onPress={() => { hapticSelection(); handleImport(); }}
             disabled={importing}
           >
             {importing ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={styles.importBtnText}>Import Backup</Text>}

@@ -7,6 +7,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { getSavedCredentials } from '../utils/api';
+import { hapticSelection } from '../utils/haptics';
 import { loadFromStorage, saveToStorage, removeFromStorage } from '../utils/storage';
 
 export default function LoginScreen() {
@@ -175,7 +176,7 @@ export default function LoginScreen() {
             <>
               <TouchableOpacity
                 style={[styles.biometricButton, loading && styles.buttonDisabled]}
-                onPress={handleBiometricLogin}
+                onPress={() => { hapticSelection(); handleBiometricLogin(); }}
                 disabled={loading}
                 activeOpacity={0.7}
               >
@@ -245,6 +246,7 @@ export default function LoginScreen() {
               <TouchableOpacity
                 style={styles.checkboxRow}
                 onPress={() => {
+                  hapticSelection();
                   const newVal = !rememberMe;
                   setRememberMe(newVal);
                   if (!newVal) setUseBiometrics(false);
@@ -261,7 +263,7 @@ export default function LoginScreen() {
               {rememberMe && biometricsAvailable && (
                 <TouchableOpacity
                   style={styles.checkboxRow}
-                  onPress={() => setUseBiometrics(!useBiometrics)}
+                  onPress={() => { hapticSelection(); setUseBiometrics(!useBiometrics); }}
                   disabled={loading}
                   activeOpacity={0.7}
                 >
@@ -276,7 +278,7 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleSubmit}
+            onPress={() => { hapticSelection(); handleSubmit(); }}
             disabled={loading}
             activeOpacity={0.8}
           >
@@ -292,6 +294,7 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={styles.switchButton}
             onPress={() => {
+              hapticSelection();
               setIsRegister(!isRegister);
               setConfirmPassword('');
             }}

@@ -145,10 +145,10 @@ export default function TemplatesScreen({ navigation }: any) {
                 }}>
                   <Text style={styles.useBtnText}>Use</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.editBtn} onPress={() => handleEdit(template)}>
+                <TouchableOpacity style={styles.editBtn} onPress={() => { hapticSelection(); handleEdit(template); }}>
                   <Text style={styles.editBtnText}>Edit</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(template.id)}>
+                <TouchableOpacity style={styles.deleteBtn} onPress={() => { hapticSelection(); handleDelete(template.id); }}>
                   <Text style={styles.deleteBtnText}>Delete</Text>
                 </TouchableOpacity>
               </View>
@@ -176,7 +176,7 @@ export default function TemplatesScreen({ navigation }: any) {
                   <TouchableOpacity
                     key={t}
                     style={[styles.typeBtn, formData.type === t && styles.typeBtnActive]}
-                    onPress={() => setFormData({ ...formData, type: t, bucketId: t !== 'expense' ? '' : formData.bucketId })}
+                    onPress={() => { hapticSelection(); setFormData({ ...formData, type: t, bucketId: t !== 'expense' ? '' : formData.bucketId }); }}
                   >
                     <Text style={[styles.typeBtnText, formData.type === t && styles.typeBtnTextActive]}>{t.charAt(0).toUpperCase() + t.slice(1)}</Text>
                   </TouchableOpacity>
@@ -205,7 +205,7 @@ export default function TemplatesScreen({ navigation }: any) {
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bucketsScroll}>
                     <TouchableOpacity
                       style={[styles.bucketChip, !formData.bucketId && styles.bucketChipActive]}
-                      onPress={() => setFormData({ ...formData, bucketId: '' })}
+                      onPress={() => { hapticSelection(); setFormData({ ...formData, bucketId: '' }); }}
                     >
                       <Text style={[styles.bucketChipText, !formData.bucketId && styles.bucketChipTextActive]}>None</Text>
                     </TouchableOpacity>
@@ -213,7 +213,7 @@ export default function TemplatesScreen({ navigation }: any) {
                       <TouchableOpacity
                         key={b.id}
                         style={[styles.bucketChip, formData.bucketId === b.id && { backgroundColor: (b.color || theme.colors.primary) + '20', borderColor: b.color || theme.colors.primary }]}
-                        onPress={() => setFormData({ ...formData, bucketId: b.id })}
+                        onPress={() => { hapticSelection(); setFormData({ ...formData, bucketId: b.id }); }}
                       >
                         <View style={[styles.bucketDot, { backgroundColor: b.color || theme.colors.primary }]} />
                         <Text style={[styles.bucketChipText, formData.bucketId === b.id && { color: b.color || theme.colors.primary, fontWeight: '600' }]}>{b.name}</Text>
@@ -232,14 +232,14 @@ export default function TemplatesScreen({ navigation }: any) {
                   placeholderTextColor={theme.colors.textTertiary}
                   onSubmitEditing={addTag}
                 />
-                <TouchableOpacity style={styles.addTagBtn} onPress={addTag}>
+                <TouchableOpacity style={styles.addTagBtn} onPress={() => { hapticSelection(); addTag(); }}>
                   <Text style={styles.addTagBtnText}>Add</Text>
                 </TouchableOpacity>
               </View>
               {formData.tags && formData.tags.length > 0 && (
                 <View style={styles.tagsWrap}>
                   {formData.tags.map((tag, idx) => (
-                    <TouchableOpacity key={idx} style={styles.tagChip} onPress={() => removeTag(idx)}>
+                    <TouchableOpacity key={idx} style={styles.tagChip} onPress={() => { hapticSelection(); removeTag(idx); }}>
                       <Text style={styles.tagChipText}>{tag} ×</Text>
                     </TouchableOpacity>
                   ))}
@@ -256,10 +256,10 @@ export default function TemplatesScreen({ navigation }: any) {
               />
             </ScrollView>
             <View style={styles.formActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={resetForm}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => { hapticSelection(); resetForm(); }}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
+              <TouchableOpacity style={styles.submitBtn} onPress={() => { hapticSelection(); handleSubmit(); }}>
                 <Text style={styles.submitBtnText}>{editingTemplate ? 'Update' : 'Create'}</Text>
               </TouchableOpacity>
             </View>
