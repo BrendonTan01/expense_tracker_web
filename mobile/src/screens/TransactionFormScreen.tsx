@@ -6,15 +6,18 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
-import { todayIsoLocal, parseIsoDateLocal, formatIsoDateLocal, formatDate } from '../utils/dateHelpers';
+import { useToast } from '../contexts/ToastContext';
+import { todayIsoLocal, parseIsoDateLocal, formatIsoDateLocal, formatDate, addDaysIsoLocal } from '../utils/dateHelpers';
 import { generateId } from '../utils/storage';
 import { hapticSuccess, hapticError, hapticSelection } from '../utils/haptics';
+import { checkForDuplicates } from '../utils/duplicateDetection';
 import { Transaction, TransactionTemplate } from '../types';
 import TransactionTemplatesSection from '../components/TransactionTemplatesSection';
 
 export default function TransactionFormScreen({ navigation, route }: any) {
   const { theme } = useTheme();
   const { state, addTransaction, updateTransaction } = useAppState();
+  const toast = useToast();
   const editTransaction: Transaction | undefined = route.params?.transaction;
   const templateFromNav: TransactionTemplate | undefined = route.params?.template;
   const isEditing = !!editTransaction;
@@ -29,6 +32,7 @@ export default function TransactionFormScreen({ navigation, route }: any) {
   const [notes, setNotes] = useState(editTransaction?.notes || templateFromNav?.notes || '');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<{ message: string; similar: Transaction[] } | null>(null);
 
   useEffect(() => {
     if (templateFromNav) {
@@ -40,6 +44,40 @@ export default function TransactionFormScreen({ navigation, route }: any) {
       setNotes(templateFromNav.notes || '');
     }
   }, [templateFromNav?.id]);
+
+  // Duplicate detection for new transactions (not when editing)
+  useEffect(() => {
+    if (isEditing || !amount || !description) {
+      setDuplicateWarning(null);
+      return;
+    }
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      setDuplicateWarning(null);
+      return;
+    }
+    const result = checkForDuplicates(
+      {
+        type,
+        amount: numAmount,
+        description,
+        bucketId: type === 'expense' ? bucketId : undefined,
+        date,
+        tags: tags.length > 0 ? tags : undefined,
+        notes: notes || undefined,
+      },
+      state.transactions,
+      24
+    );
+    if (result.isDuplicate) {
+      setDuplicateWarning({
+        message: `Possible duplicate (${result.confidence} confidence)`,
+        similar: result.similarTransactions,
+      });
+    } else {
+      setDuplicateWarning(null);
+    }
+  }, [isEditing, type, amount, description, bucketId, date, tags, notes, state.transactions]);
 
   const handleUseTemplate = (template: TransactionTemplate) => {
     setType(template.type);
@@ -66,6 +104,23 @@ export default function TransactionFormScreen({ navigation, route }: any) {
       return;
     }
 
+    // If duplicate warning, confirm before saving
+    if (!isEditing && duplicateWarning && duplicateWarning.similar.length > 0) {
+      Alert.alert(
+        'Possible Duplicate',
+        `${duplicateWarning.message}. Save anyway?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Save Anyway', onPress: () => performSave() },
+        ]
+      );
+      return;
+    }
+
+    await performSave();
+  };
+
+  const performSave = async () => {
     setLoading(true);
     try {
       const txnData = {
@@ -81,9 +136,11 @@ export default function TransactionFormScreen({ navigation, route }: any) {
       };
 
       if (isEditing) {
-        await updateTransaction(editTransaction.id, txnData);
+        await updateTransaction(editTransaction!.id, txnData);
+        toast.show('Transaction updated');
       } else {
         await addTransaction({ id: generateId(), ...txnData });
+        toast.show('Transaction saved');
       }
       hapticSuccess();
       navigation.goBack();
@@ -125,13 +182,24 @@ export default function TransactionFormScreen({ navigation, route }: any) {
           />
         )}
 
+        {/* Duplicate warning */}
+        {duplicateWarning && (
+          <View style={[styles.duplicateBanner, { backgroundColor: theme.colors.warning + '20', borderColor: theme.colors.warning }]}>
+            <Text style={[styles.duplicateText, { color: theme.colors.warning }]}>{duplicateWarning.message}</Text>
+            <Text style={styles.duplicateSubtext}>Similar: {duplicateWarning.similar[0]?.description}</Text>
+          </View>
+        )}
+
         {/* Type Selector */}
-        <View style={styles.typeSelector}>
+        <View style={styles.typeSelector} accessibilityRole="radiogroup" accessibilityLabel="Transaction type">
           {(['expense', 'income', 'investment'] as const).map(t => (
             <TouchableOpacity
               key={t}
               style={[styles.typeBtn, type === t && { backgroundColor: theme.colors[t === 'expense' ? 'expense' : t === 'income' ? 'income' : 'investment'] }]}
               onPress={() => { hapticSelection(); setType(t); }}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: type === t }}
+              accessibilityLabel={`${t.charAt(0).toUpperCase() + t.slice(1)}`}
             >
               <Text style={[styles.typeBtnText, type === t && { color: '#fff' }]}>
                 {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -150,6 +218,8 @@ export default function TransactionFormScreen({ navigation, route }: any) {
             placeholder="0.00"
             placeholderTextColor={theme.colors.textTertiary}
             keyboardType="decimal-pad"
+            accessibilityLabel="Amount"
+            accessibilityHint="Enter the transaction amount"
           />
         </View>
 
@@ -162,6 +232,8 @@ export default function TransactionFormScreen({ navigation, route }: any) {
             onChangeText={setDescription}
             placeholder="What was this for?"
             placeholderTextColor={theme.colors.textTertiary}
+            accessibilityLabel="Description"
+            accessibilityHint="Enter what this transaction was for"
           />
         </View>
 
@@ -175,6 +247,9 @@ export default function TransactionFormScreen({ navigation, route }: any) {
                   key={b.id}
                   style={[styles.bucketChip, bucketId === b.id && { backgroundColor: (b.color || theme.colors.primary) + '20', borderColor: b.color || theme.colors.primary }]}
                   onPress={() => { hapticSelection(); setBucketId(b.id); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Bucket ${b.name}`}
+                  accessibilityState={{ selected: bucketId === b.id }}
                 >
                   <View style={[styles.bucketDot, { backgroundColor: b.color || theme.colors.primary }]} />
                   <Text style={[styles.bucketChipText, bucketId === b.id && { color: b.color || theme.colors.primary, fontWeight: '600' }]}>
@@ -189,7 +264,25 @@ export default function TransactionFormScreen({ navigation, route }: any) {
         {/* Date */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Date</Text>
-          <TouchableOpacity style={styles.dateBtn} onPress={() => { hapticSelection(); setShowDatePicker(true); }}>
+          <View style={styles.dateShortcuts}>
+            <TouchableOpacity
+              style={[styles.dateShortcut, date === todayIsoLocal() && styles.dateShortcutActive]}
+              onPress={() => { hapticSelection(); setDate(todayIsoLocal()); }}
+              accessibilityRole="button"
+              accessibilityLabel="Set date to today"
+            >
+              <Text style={[styles.dateShortcutText, date === todayIsoLocal() && styles.dateShortcutTextActive]}>Today</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.dateShortcut, date === addDaysIsoLocal(todayIsoLocal(), -1) && styles.dateShortcutActive]}
+              onPress={() => { hapticSelection(); setDate(addDaysIsoLocal(todayIsoLocal(), -1)); }}
+              accessibilityRole="button"
+              accessibilityLabel="Set date to yesterday"
+            >
+              <Text style={[styles.dateShortcutText, date === addDaysIsoLocal(todayIsoLocal(), -1) && styles.dateShortcutTextActive]}>Yesterday</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity style={styles.dateBtn} onPress={() => { hapticSelection(); setShowDatePicker(true); }} accessibilityLabel="Select date" accessibilityHint="Opens date picker">
             <Text style={styles.dateBtnText}>{formatDate(date)}</Text>
           </TouchableOpacity>
           {showDatePicker && (
@@ -250,6 +343,8 @@ export default function TransactionFormScreen({ navigation, route }: any) {
           style={[styles.saveBtn, loading && { opacity: 0.6 }]}
           onPress={() => { hapticSelection(); handleSave(); }}
           disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel={isEditing ? 'Update transaction' : 'Add transaction'}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
@@ -314,6 +409,26 @@ function createStyles(theme: any) {
     },
     bucketDot: { width: 8, height: 8, borderRadius: 4, marginRight: theme.spacing.sm },
     bucketChipText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
+    duplicateBanner: {
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      marginBottom: theme.spacing.lg,
+    },
+    duplicateText: { fontSize: theme.fontSize.sm, fontWeight: '600' },
+    duplicateSubtext: { fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginTop: theme.spacing.xs },
+    dateShortcuts: { flexDirection: 'row', gap: theme.spacing.sm, marginBottom: theme.spacing.sm },
+    dateShortcut: {
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      borderRadius: theme.borderRadius.md,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    dateShortcutActive: { backgroundColor: theme.colors.primary + '20', borderColor: theme.colors.primary },
+    dateShortcutText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
+    dateShortcutTextActive: { color: theme.colors.primary, fontWeight: '600' },
     dateBtn: {
       backgroundColor: theme.colors.surface,
       borderWidth: 1,

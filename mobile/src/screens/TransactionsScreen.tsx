@@ -1,11 +1,14 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity, TextInput,
-  RefreshControl, Alert, Dimensions,
+  RefreshControl, Alert,
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
+import { useToast } from '../contexts/ToastContext';
 import { formatCurrency, formatDate } from '../utils/dateHelpers';
+import { generateId } from '../utils/storage';
 import { Transaction } from '../types';
 import { hapticMedium, hapticSelection } from '../utils/haptics';
 
@@ -14,7 +17,8 @@ type SortDir = 'asc' | 'desc';
 
 export default function TransactionsScreen({ navigation }: any) {
   const { theme } = useTheme();
-  const { state, deleteTransaction, deleteTransactions, refreshAll } = useAppState();
+  const { state, deleteTransaction, deleteTransactions, addTransaction, refreshAll, error } = useAppState();
+  const toast = useToast();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'expense' | 'income' | 'investment'>('all');
   const [sortField, setSortField] = useState<SortField>('date');
@@ -73,6 +77,16 @@ export default function TransactionsScreen({ navigation }: any) {
     setSelectedIds(new Set([id]));
   };
 
+  const performDeleteWithUndo = useCallback((txn: Transaction) => {
+    deleteTransaction(txn.id);
+    toast.show(`"${txn.description}" deleted`, {
+      onUndo: () => {
+        const { id, isRecurring, recurringId, ...rest } = txn;
+        addTransaction({ id: generateId(), ...rest, isRecurring: false, recurringId: undefined });
+      },
+    });
+  }, [deleteTransaction, addTransaction, toast]);
+
   const handleDeleteSelected = () => {
     Alert.alert(
       'Delete Transactions',
@@ -83,9 +97,24 @@ export default function TransactionsScreen({ navigation }: any) {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            await deleteTransactions(Array.from(selectedIds));
+            const toDelete = Array.from(selectedIds);
+            const txns = toDelete.map(id => state.transactions.find(t => t.id === id)).filter(Boolean) as Transaction[];
+            await deleteTransactions(toDelete);
             setSelectedIds(new Set());
             setSelectionMode(false);
+            if (txns.length === 1) {
+              const { id, isRecurring, recurringId, ...rest } = txns[0];
+              toast.show('Transaction deleted', {
+                onUndo: () => addTransaction({ id: generateId(), ...rest, isRecurring: false, recurringId: undefined }),
+              });
+            } else if (txns.length > 1) {
+              toast.show(`${txns.length} transactions deleted`, {
+                onUndo: () => Promise.all(txns.map(t => {
+                  const { id, isRecurring, recurringId, ...rest } = t;
+                  return addTransaction({ id: generateId(), ...rest, isRecurring: false, recurringId: undefined });
+                })),
+              });
+            }
           },
         },
       ]
@@ -95,7 +124,7 @@ export default function TransactionsScreen({ navigation }: any) {
   const handleDelete = (txn: Transaction) => {
     Alert.alert('Delete Transaction', `Delete "${txn.description}"?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteTransaction(txn.id) },
+      { text: 'Delete', style: 'destructive', onPress: () => performDeleteWithUndo(txn) },
     ]);
   };
 
@@ -120,64 +149,102 @@ export default function TransactionsScreen({ navigation }: any) {
 
   const styles = createStyles(theme);
 
+  const renderRightActions = (item: Transaction) => (
+    <TouchableOpacity
+      style={styles.swipeDelete}
+      onPress={() => performDeleteWithUndo(item)}
+      accessibilityRole="button"
+      accessibilityLabel={`Delete ${item.description}`}
+    >
+      <Text style={styles.swipeDeleteText}>Delete</Text>
+    </TouchableOpacity>
+  );
+
   const renderItem = ({ item }: { item: Transaction }) => {
     const isSelected = selectedIds.has(item.id);
     return (
-      <TouchableOpacity
-        style={[styles.txnItem, isSelected && styles.txnItemSelected]}
-        onPress={() => {
-          hapticSelection();
-          if (selectionMode) {
-            toggleSelect(item.id);
-          } else {
-            navigation.navigate('TransactionForm', { transaction: item });
-          }
-        }}
-        onLongPress={() => handleLongPress(item.id)}
-        activeOpacity={0.7}
+      <Swipeable
+        renderRightActions={() => renderRightActions(item)}
+        friction={2}
       >
-        <View style={styles.txnLeft}>
-          <View style={[styles.typeDot, { backgroundColor: typeColor(item.type) }]} />
-          <View style={styles.txnInfo}>
-            <Text style={styles.txnDesc} numberOfLines={1}>{item.description}</Text>
-            <View style={styles.txnMeta}>
-              <Text style={styles.txnDate}>{formatDate(item.date)}</Text>
-              {item.bucketId && (
-                <View style={[styles.bucketBadge, { backgroundColor: getBucketColor(item.bucketId) + '20' }]}>
-                  <Text style={[styles.bucketBadgeText, { color: getBucketColor(item.bucketId) }]} numberOfLines={1}>
-                    {getBucketName(item.bucketId)}
-                  </Text>
+        <TouchableOpacity
+          style={[styles.txnItem, isSelected && styles.txnItemSelected]}
+          onPress={() => {
+            hapticSelection();
+            if (selectionMode) {
+              toggleSelect(item.id);
+            } else {
+              navigation.navigate('TransactionForm', { transaction: item });
+            }
+          }}
+          onLongPress={() => handleLongPress(item.id)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`${item.description}, ${formatCurrency(item.amount)}, ${formatDate(item.date)}`}
+          accessibilityHint="Double tap to edit, long press to select"
+        >
+          <View style={styles.txnLeft}>
+            <View style={[styles.typeDot, { backgroundColor: typeColor(item.type) }]} />
+            <View style={styles.txnInfo}>
+              <Text style={styles.txnDesc} numberOfLines={1}>{item.description}</Text>
+              <View style={styles.txnMeta}>
+                <Text style={styles.txnDate}>{formatDate(item.date)}</Text>
+                {item.bucketId && (
+                  <View style={[styles.bucketBadge, { backgroundColor: getBucketColor(item.bucketId) + '20' }]}>
+                    <Text style={[styles.bucketBadgeText, { color: getBucketColor(item.bucketId) }]} numberOfLines={1}>
+                      {getBucketName(item.bucketId)}
+                    </Text>
+                  </View>
+                )}
+                {item.isRecurring && <Text style={styles.recurringBadge}>Recurring</Text>}
+              </View>
+              {item.tags && item.tags.length > 0 && (
+                <View style={styles.tagsRow}>
+                  {item.tags.slice(0, 3).map(tag => (
+                    <View key={tag} style={styles.tagChip}>
+                      <Text style={styles.tagText}>{tag}</Text>
+                    </View>
+                  ))}
                 </View>
               )}
-              {item.isRecurring && <Text style={styles.recurringBadge}>Recurring</Text>}
             </View>
-            {item.tags && item.tags.length > 0 && (
-              <View style={styles.tagsRow}>
-                {item.tags.slice(0, 3).map(tag => (
-                  <View key={tag} style={styles.tagChip}>
-                    <Text style={styles.tagText}>{tag}</Text>
-                  </View>
-                ))}
-              </View>
+          </View>
+          <View style={styles.txnRight}>
+            <Text style={[styles.txnAmount, { color: typeColor(item.type) }]}>
+              {item.type === 'income' ? '+' : '-'}{formatCurrency(item.amount)}
+            </Text>
+            {!selectionMode && (
+              <TouchableOpacity onPress={() => { hapticSelection(); handleDelete(item); }} style={styles.deleteBtn} accessibilityLabel={`Delete ${item.description}`}>
+                <Text style={styles.deleteBtnText}>Delete</Text>
+              </TouchableOpacity>
             )}
           </View>
-        </View>
-        <View style={styles.txnRight}>
-          <Text style={[styles.txnAmount, { color: typeColor(item.type) }]}>
-            {item.type === 'income' ? '+' : '-'}{formatCurrency(item.amount)}
-          </Text>
-          {!selectionMode && (
-            <TouchableOpacity onPress={() => { hapticSelection(); handleDelete(item); }} style={styles.deleteBtn}>
-              <Text style={styles.deleteBtnText}>Delete</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </Swipeable>
     );
   };
 
+  const hasActiveFilters = search.trim() !== '' || typeFilter !== 'all';
+  const isEmptyList = state.transactions.length === 0;
+  const isEmptySearch = hasActiveFilters && filtered.length === 0;
+
   return (
     <View style={styles.container}>
+      {/* Error banner */}
+      {error && (
+        <View style={[styles.errorBanner, { backgroundColor: theme.colors.danger + '20', borderColor: theme.colors.danger }]}>
+          <Text style={[styles.errorText, { color: theme.colors.danger }]}>{error}</Text>
+          <TouchableOpacity
+            onPress={() => { hapticSelection(); refreshAll(); }}
+            style={[styles.retryBtn, { backgroundColor: theme.colors.danger }]}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading data"
+          >
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Search & Filters */}
       <View style={styles.filterBar}>
         <TextInput
@@ -186,6 +253,8 @@ export default function TransactionsScreen({ navigation }: any) {
           placeholderTextColor={theme.colors.textTertiary}
           value={search}
           onChangeText={setSearch}
+          accessibilityLabel="Search transactions"
+          accessibilityHint="Filter by description, notes, or amount"
         />
       </View>
 
@@ -237,8 +306,14 @@ export default function TransactionsScreen({ navigation }: any) {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>No Transactions</Text>
-            <Text style={styles.emptySubtitle}>Tap the + button to add your first transaction</Text>
+            <Text style={styles.emptyTitle}>
+              {isEmptySearch ? 'No Results' : 'No Transactions'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {isEmptySearch
+                ? `No transactions match${search.trim() ? ` "${search.trim()}"` : ''}${typeFilter !== 'all' ? ` for ${typeFilter}` : ''}. Try a different search.`
+                : 'Tap the + button to add your first transaction'}
+            </Text>
           </View>
         }
       />
@@ -329,6 +404,28 @@ function createStyles(theme: any) {
     txnAmount: { fontSize: theme.fontSize.md, fontWeight: '700' },
     deleteBtn: { marginTop: theme.spacing.xs },
     deleteBtnText: { fontSize: theme.fontSize.xs, color: theme.colors.danger },
+    swipeDelete: {
+      backgroundColor: theme.colors.danger,
+      justifyContent: 'center',
+      alignItems: 'center',
+      width: 80,
+      marginBottom: theme.spacing.sm,
+      borderTopRightRadius: theme.borderRadius.md,
+      borderBottomRightRadius: theme.borderRadius.md,
+    },
+    swipeDeleteText: { color: '#fff', fontSize: theme.fontSize.sm, fontWeight: '600' },
+    errorBanner: {
+      margin: theme.spacing.lg,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    errorText: { flex: 1, fontSize: theme.fontSize.sm, marginRight: theme.spacing.md },
+    retryBtn: { paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, borderRadius: theme.borderRadius.md },
+    retryBtnText: { color: '#fff', fontSize: theme.fontSize.sm, fontWeight: '600' },
     emptyContainer: { paddingVertical: theme.spacing.xxl * 2, alignItems: 'center' },
     emptyTitle: { fontSize: theme.fontSize.lg, fontWeight: '600', color: theme.colors.textSecondary },
     emptySubtitle: { fontSize: theme.fontSize.sm, color: theme.colors.textTertiary, marginTop: theme.spacing.sm },

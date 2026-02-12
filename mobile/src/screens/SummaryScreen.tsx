@@ -107,7 +107,7 @@ function computeSavingsScore(transactions: Transaction[], budgets: Budget[], buc
 
 export default function SummaryScreen() {
   const { theme } = useTheme();
-  const { state, loading, refreshAll } = useAppState();
+  const { state, loading, refreshAll, error } = useAppState();
   const { layout } = useLayout();
   const [period, setPeriod] = useState<PeriodFilter>('thisMonth');
   const [refreshing, setRefreshing] = useState(false);
@@ -388,6 +388,19 @@ export default function SummaryScreen() {
 
   return (
     <View style={styles.container}>
+      {error && (
+        <View style={[styles.errorBanner, { backgroundColor: theme.colors.danger + '20', borderColor: theme.colors.danger }]}>
+          <Text style={[styles.errorText, { color: theme.colors.danger }]}>{error}</Text>
+          <TouchableOpacity
+            onPress={() => { hapticSelection(); refreshAll(); }}
+            style={[styles.retryBtn, { backgroundColor: theme.colors.danger }]}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading data"
+          >
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
@@ -418,6 +431,18 @@ export default function SummaryScreen() {
 function createStyles(theme: any) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
+    errorBanner: {
+      margin: theme.spacing.lg,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    errorText: { flex: 1, fontSize: theme.fontSize.sm, marginRight: theme.spacing.md },
+    retryBtn: { paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, borderRadius: theme.borderRadius.md },
+    retryBtnText: { color: '#fff', fontSize: theme.fontSize.sm, fontWeight: '600' },
     scrollContent: { padding: theme.spacing.lg, paddingBottom: 100 },
     periodScroll: { marginBottom: theme.spacing.lg, flexGrow: 0 },
     periodChip: {

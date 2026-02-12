@@ -6,6 +6,7 @@ import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { AppStateProvider } from './src/contexts/AppStateContext';
 import { LayoutProvider } from './src/contexts/LayoutContext';
+import { ToastProvider } from './src/contexts/ToastContext';
 import RootNavigator from './src/navigation/RootNavigator';
 
 function AppContent() {
@@ -26,7 +27,9 @@ export default function App() {
           <AuthProvider>
             <AppStateProvider>
               <LayoutProvider>
-                <AppContent />
+                <ToastProvider>
+                  <AppContent />
+                </ToastProvider>
               </LayoutProvider>
             </AppStateProvider>
           </AuthProvider>

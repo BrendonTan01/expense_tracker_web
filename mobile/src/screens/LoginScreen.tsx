@@ -209,6 +209,8 @@ export default function LoginScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               editable={!loading}
+              accessibilityLabel="Email"
+              accessibilityHint="Enter your email address"
             />
           </View>
 
@@ -222,6 +224,8 @@ export default function LoginScreen() {
               placeholderTextColor={theme.colors.textTertiary}
               secureTextEntry
               editable={!loading}
+              accessibilityLabel="Password"
+              accessibilityHint="Enter your password"
             />
           </View>
 
