@@ -140,15 +140,15 @@ export default function SettingsScreen({ navigation }: any) {
       {/* Tab Customisation */}
       <Text style={styles.sectionHeader}>Tabs</Text>
       <View style={styles.card}>
-        {layout.tabs.map(tab => (
+        {layout.tabs.filter(tab => tab.id !== 'more').map(tab => (
           <View key={tab.id} style={styles.switchRow}>
             <Text style={styles.switchLabel}>{tab.label}</Text>
             <Switch
-              value={tab.id === 'more' ? true : tab.visible}
+              value={tab.visible}
               onValueChange={() => toggleTab(tab.id)}
               trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
               thumbColor="#fff"
-              disabled={tab.id === 'add' || tab.id === 'summary' || tab.id === 'more'}
+              disabled={tab.id === 'add' || tab.id === 'summary'}
             />
           </View>
         ))}
