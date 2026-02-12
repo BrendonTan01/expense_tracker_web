@@ -144,11 +144,11 @@ export default function SettingsScreen({ navigation }: any) {
           <View key={tab.id} style={styles.switchRow}>
             <Text style={styles.switchLabel}>{tab.label}</Text>
             <Switch
-              value={tab.visible}
+              value={tab.id === 'more' ? true : tab.visible}
               onValueChange={() => toggleTab(tab.id)}
               trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
               thumbColor="#fff"
-              disabled={tab.id === 'add' || tab.id === 'summary'}
+              disabled={tab.id === 'add' || tab.id === 'summary' || tab.id === 'more'}
             />
           </View>
         ))}

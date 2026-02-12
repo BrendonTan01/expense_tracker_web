@@ -120,7 +120,7 @@ export default function MainTabs() {
   const { theme } = useTheme();
   const { layout } = useLayout();
 
-  const visibleTabs = layout.tabs.filter(t => t.visible);
+  const visibleTabs = layout.tabs.filter(t => t.visible || t.id === 'more');
 
   return (
     <Tab.Navigator

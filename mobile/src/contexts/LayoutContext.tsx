@@ -71,7 +71,9 @@ export function LayoutProvider({ children }: { children: ReactNode }) {
       });
       const mergedTabs = DEFAULT_TABS.map(def => {
         const saved_t = saved.tabs?.find(t => t.id === def.id);
-        return saved_t || def;
+        const tab = saved_t || def;
+        // Always keep 'more' tab visible (contains settings)
+        return tab.id === 'more' ? { ...tab, visible: true } : tab;
       });
       setLayout({ dashboardSections: mergedSections, tabs: mergedTabs });
       setLoaded(true);
@@ -111,8 +113,8 @@ export function LayoutProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggleTab = useCallback((tabId: string) => {
-    // Don't allow hiding 'add' or 'summary' tabs
-    if (tabId === 'add' || tabId === 'summary') return;
+    // Don't allow hiding 'add', 'summary', or 'more' tabs (more contains settings)
+    if (tabId === 'add' || tabId === 'summary' || tabId === 'more') return;
     setLayout(prev => ({
       ...prev,
       tabs: prev.tabs.map(t =>
