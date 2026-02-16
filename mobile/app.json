@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.expensetracker.mobile"
+      "bundleIdentifier": "com.brendontan.expensetracker"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +22,7 @@
         "backgroundColor": "#0b1220"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.expensetracker.mobile"
+      "package": "com.brendontan.expensetracker"
     },
     "web": {
       "favicon": "./assets/favicon.png"
