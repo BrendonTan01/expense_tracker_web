@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
-import { authApi, getAuthToken, setAuthToken, clearAuthToken, setOnUnauthorized, saveCredentials, clearSavedCredentials } from '../utils/api';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback, useMemo } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
+import { authApi, getAuthToken, setAuthToken, clearAuthToken, setOnUnauthorized, saveCredentials, clearSavedCredentials, getSavedCredentials } from '../utils/api';
 import { saveToStorage, removeFromStorage } from '../utils/storage';
 
 interface User {
@@ -47,6 +48,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setOnUnauthorized(handleUnauthorized);
   }, [handleUnauthorized]);
 
+  // Keep refs for use in AppState callback (avoids stale closures)
+  const userRef = useRef<User | null>(null);
+  const handleUnauthorizedRef = useRef(handleUnauthorized);
+  userRef.current = user;
+  handleUnauthorizedRef.current = handleUnauthorized;
+
   // Load token from SecureStore on mount
   useEffect(() => {
     (async () => {
@@ -68,6 +75,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     })();
+  }, []);
+
+  // When app comes to foreground: re-verify or silent re-login to avoid token expiry surprises
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextState: AppStateStatus) => {
+      if (nextState !== 'active') return;
+      const currentUser = userRef.current;
+      if (!currentUser) return; // Not logged in, nothing to refresh
+
+      try {
+        const credentials = await getSavedCredentials();
+        if (credentials) {
+          // Silent re-login to get a fresh token every time app opens
+          try {
+            const data = await authApi.login(credentials.email, credentials.password);
+            await setAuthToken(data.token);
+            setToken(data.token);
+            setUser(data.user);
+          } catch {
+            // Re-login failed (e.g. password changed); verify current token
+            try {
+              await authApi.verify();
+            } catch {
+              handleUnauthorizedRef.current();
+            }
+          }
+        } else {
+          // No saved credentials: verify token; if expired, show login
+          try {
+            await authApi.verify();
+          } catch {
+            handleUnauthorizedRef.current();
+          }
+        }
+      } catch {
+        // Ignore errors (e.g. network) - user can retry on next action
+      }
+    });
+    return () => subscription.remove();
   }, []);
 
   const login = useCallback(async (email: string, password: string, rememberMe?: boolean) => {
