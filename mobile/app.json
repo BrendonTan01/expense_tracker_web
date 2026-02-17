@@ -28,6 +28,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "./plugins/withGradleJvmArgs.js",
       [
         "expo-build-properties",
         {
