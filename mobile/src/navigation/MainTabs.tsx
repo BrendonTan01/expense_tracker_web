@@ -198,7 +198,13 @@ export default function MainTabs() {
                 key="transactions"
                 name="TransactionsTab"
                 component={TransactionsStackScreen}
-                listeners={{ tabPress: () => hapticLight() }}
+                listeners={({ navigation }) => ({
+                  tabPress: (e) => {
+                    hapticLight();
+                    // Always show list view when Transactions tab is tapped (pop any stacked screens like TransactionForm)
+                    navigation.navigate('TransactionsTab', { screen: 'TransactionsList' });
+                  },
+                })}
                 options={{
                   tabBarLabel: 'Transactions',
                   tabBarIcon: ({ color, size }) => <TabIcon name="transactions" color={color} size={size} />,
