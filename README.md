@@ -1,158 +1,165 @@
 # Expense Tracker
 
-A web-based expense tracking application built with React and TypeScript. Track your expenses, income, and manage custom spending buckets with recurring transaction support.
+Personal finance tracker for the web and Android. Track income, expenses, and investments; organize spending with custom buckets; set budgets; and review trends with summary, calendar, and reflection views.
+
+The web app deploys to **Vercel** with **Supabase** for auth and data. The Android app in `mobile/` is built with **Expo** and is published to the **Google Play Store as an unlisted app** for personal use.
 
 ## Features
 
-- **Custom Spending Buckets**: Create and manage custom categories (buckets) for organizing expenses
-- **Income & Expense Tracking**: Add multiple income sources and expenses with detailed descriptions
-- **Recurring Transactions**: Set up recurring transactions (daily, weekly, monthly, yearly)
-- **Summary Dashboard**: View your financial summary with breakdowns by bucket
-- **Backend Database**: Persistent data storage using SQLite database with REST API
+- **Auth**: Sign up / log in with per-user data (Supabase + Row Level Security)
+- **Buckets**: Custom spending categories for expenses
+- **Transactions**: Income, expense, and investment entries with tags, notes, and templates
+- **Recurring**: Daily, weekly, fortnightly, monthly, and yearly schedules that auto-generate transactions
+- **Budgets**: Monthly and yearly budgets by bucket
+- **Summary dashboard**: Period filters, charts, and bucket breakdowns
+- **Calendar**: Month/year views with spending heatmap
+- **Reflections**: Monthly/yearly notes and review
+- **Backup & restore**: Export/import your data
+- **Dark mode** and installable **PWA** (web)
+- **Mobile app**: Native Android client (Expo) sharing the same backend
 
-## Getting Started
+## Project layout
+
+| Path | Purpose |
+|------|---------|
+| `src/` | Web frontend (React + TypeScript + Vite) |
+| `api/` | Vercel serverless API routes |
+| `backend/` | Optional local Express API (SQLite) for offline/dev use |
+| `supabase/` | Database schema and migrations |
+| `mobile/` | Expo React Native app (Android / iOS) |
+
+## Getting started (web)
 
 ### Prerequisites
 
-- Node.js (v16 or higher)
-- npm or yarn
+- Node.js 18+ (recommended)
+- npm
+- A Supabase project (see [SUPABASE_SETUP.md](./SUPABASE_SETUP.md))
 
 ### Installation
 
-1. Install dependencies:
 ```bash
 npm install
 ```
 
-2. Start the backend server:
-```bash
-npm run server
-```
-
-The backend API will run on `http://localhost:3001`
-
-3. In a separate terminal, start the frontend development server:
-```bash
-npm run dev
-```
-
-4. Open your browser and navigate to the URL shown in the terminal (usually `http://localhost:5173`)
-
-**Alternative: Run both servers simultaneously:**
-```bash
-npm run dev:all
-```
-
-This will start both the frontend and backend servers concurrently.
-
-### Building for Production
-
-```bash
-npm run build
-```
-
-The built files will be in the `dist` directory.
-
-### Running Production Build Locally
-
-To test the production build (backend serves frontend):
-
-```bash
-npm run build:start
-```
-
-This builds the frontend and starts the server. Visit `http://localhost:3001` to see the app.
-
-## Deployment
-
-**Want to share your app with others without running anything on your computer?**
-
-Deploy everything to Vercel with Supabase for the database!
-
-**Quick Start:**
-
-1. **Set up Supabase** (free database):
-   - Sign up at [supabase.com](https://supabase.com)
-   - Create a project
-   - Run the SQL schema from `supabase/schema.sql`
-   - Get your API keys
-
-2. **Deploy to Vercel**:
-   - Push code to GitHub
-   - Sign up at [vercel.com](https://vercel.com)
-   - Import your GitHub repo
-   - Add environment variables:
-     - `VITE_SUPABASE_URL` = your Supabase project URL
-     - `VITE_SUPABASE_ANON_KEY` = your Supabase anon key
-   - Deploy!
-
-3. **Share your Vercel URL** - That's it!
-
-For detailed step-by-step instructions, see:
-- [DEPLOYMENT.md](./DEPLOYMENT.md) - Vercel deployment guide
-- [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) - Supabase setup guide
-
-## Usage
-
-1. **Buckets**: Create custom spending categories in the "Buckets" tab
-2. **Transactions**: Add income or expenses in the "Transactions" tab
-3. **Recurring**: Set up recurring transactions that will automatically generate new transactions
-4. **Summary**: View your financial overview and breakdowns in the "Summary" tab
-
-## Technology Stack
-
-### Frontend
-- React 18
-- TypeScript
-- Vite
-- CSS3
-
-### Backend
-- Vercel Serverless Functions
-- Supabase (PostgreSQL)
-- REST API
-
-## Data Storage
-
-All data is stored in a Supabase PostgreSQL database. The database schema is defined in `supabase/schema.sql`. 
-
-For local development, you'll need to:
-1. Create a Supabase project (see [SUPABASE_SETUP.md](./SUPABASE_SETUP.md))
-2. Run the schema SQL in Supabase SQL Editor
-3. Add environment variables to `.env` file
-
-### API Endpoints
-
-- `GET /api/buckets` - Get all buckets
-- `POST /api/buckets` - Create a new bucket
-- `PUT /api/buckets/:id` - Update a bucket
-- `DELETE /api/buckets/:id` - Delete a bucket
-
-- `GET /api/transactions` - Get all transactions
-- `POST /api/transactions` - Create a new transaction
-- `PUT /api/transactions/:id` - Update a transaction
-- `DELETE /api/transactions/:id` - Delete a transaction
-
-- `GET /api/recurring` - Get all recurring transactions
-- `POST /api/recurring` - Create a new recurring transaction
-- `PUT /api/recurring/:id` - Update a recurring transaction
-- `DELETE /api/recurring/:id` - Delete a recurring transaction
-
-- `GET /api/health` - Health check endpoint
-
-### Environment Variables
-
-Create a `.env` file in the root directory for local development:
+Create a `.env` file in the project root:
 
 ```env
 VITE_SUPABASE_URL=https://xxxxx.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJ...
 ```
 
-Get these values from your Supabase project dashboard → Settings → API.
+### Development
 
-For production (Vercel), add these as environment variables in the Vercel dashboard.
+**Recommended (frontend + API against Supabase via Vercel-style routes):**
+
+```bash
+npm run dev
+```
+
+Open the URL shown in the terminal (usually `http://localhost:5173`).
+
+**Optional local Express + SQLite backend:**
+
+```bash
+npm run server          # API on http://localhost:3001
+npm run dev             # frontend
+# or both:
+npm run dev:all
+```
+
+Use the local Express server only if you intentionally want SQLite; production and the mobile app use Supabase.
+
+### Production build
+
+```bash
+npm run build
+```
+
+Output is in `dist/`. To serve the built frontend from the local Express server:
+
+```bash
+npm run build:start
+```
+
+Then visit `http://localhost:3001`.
+
+## Mobile app
+
+The Android (and iOS-capable) client lives in `mobile/`.
+
+```bash
+cd mobile
+npm install
+npx expo start
+```
+
+- **Package ID**: `com.brendontan.expensetracker`
+- **EAS project**: configured in `mobile/app.json` / `mobile/eas.json`
+- **Play Store**: published as an **unlisted** listing for personal use (not publicly discoverable)
+
+Production mobile builds and submits use Expo EAS (`eas build` / `eas submit`) from the `mobile/` directory.
+
+## Deployment (web)
+
+Deploy the web app to Vercel with Supabase as the database.
+
+1. Set up Supabase and run `supabase/schema.sql` (plus any migrations in `supabase/`) — see [SUPABASE_SETUP.md](./SUPABASE_SETUP.md)
+2. Import this repo in [Vercel](https://vercel.com)
+3. Add environment variables:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+4. Deploy and use the Vercel URL
+
+Details: [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+## Usage (web)
+
+1. **Summary** — overview, charts, and budget status
+2. **Calendar** — browse spending by day/month/year
+3. **Transactions** — add/edit entries; use templates for quick entry
+4. **Reflections** — write monthly/yearly notes
+5. **Settings** — manage buckets, recurring rules, budgets, backup, and appearance
+
+## Technology stack
+
+### Web
+- React 18, TypeScript, Vite
+- React Router, Recharts
+- Vite PWA plugin
+
+### Mobile
+- Expo / React Native
+- React Navigation
+- EAS Build & Submit
+
+### Backend & data
+- Vercel serverless functions (`api/`)
+- Supabase (Auth + PostgreSQL + RLS)
+- Optional local Express + SQLite (`backend/`)
+
+## API overview
+
+Authenticated endpoints (Bearer token) under `/api`:
+
+| Area | Routes |
+|------|--------|
+| Auth | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/verify`, `POST /api/auth/change-password` |
+| Buckets | `GET/POST /api/buckets`, `PUT/DELETE /api/buckets/:id` |
+| Transactions | `GET/POST /api/transactions`, `PUT/DELETE /api/transactions/:id` |
+| Recurring | `GET/POST /api/recurring`, `PUT/DELETE /api/recurring/:id` |
+| Budgets | `GET/POST /api/budgets`, `PUT/DELETE /api/budgets/:id` |
+| Summaries | `GET/POST /api/summaries` (monthly/yearly notes) |
+
+## Environment variables
+
+```env
+VITE_SUPABASE_URL=https://xxxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJ...
+```
+
+Get these from Supabase → Project Settings → API. On Vercel, set the same names in the project environment variables.
 
 ## License
 
-MIT# expense_tracker_web
+MIT
