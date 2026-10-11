@@ -88,6 +88,8 @@ Then visit `http://localhost:3001`.
 
 The Android (and iOS-capable) client lives in `mobile/`.
 
+The mobile project uses Expo SDK 57 and React Native 0.86.3. Use Node.js 22.13 or newer; install the versions recorded in the lockfile with `npm ci`.
+
 ```bash
 cd mobile
 npm install
@@ -99,6 +101,26 @@ npx expo start
 - **Play Store**: published as an **unlisted** listing for personal use (not publicly discoverable)
 
 Production mobile builds and submits use Expo EAS (`npx eas-cli@latest build` / `npx eas-cli@latest submit`) from the `mobile/` directory. EAS CLI is run separately rather than bundled into the app dependencies.
+
+### Mobile upgrade verification
+
+From `mobile/`, run:
+
+```bash
+npx tsc --noEmit
+npx expo-doctor
+npx expo export --platform android --output-dir /tmp/expense-tracker-android-check
+```
+
+The SDK 54 → 55 → 56 → 57 migration passed type checking and Android JavaScript bundling at each stage. SDK 56's known Hermes regression was resolved by advancing to patched SDK 57. SDK 57 also requires the splash-screen config plugin instead of the old `splash` app setting.
+
+Generated Android files are ignored by Git. After an SDK upgrade, preserve any local native modifications before regenerating with `npx expo prebuild --platform android --clean`. The previous local Android project from this upgrade is preserved under ignored `mobile/.native-backups/`; this folder is not uploaded as source.
+
+JavaScript export and native project generation do **not** prove that an Android APK/AAB builds or runs. Before release, build a fresh Android binary and test login/session handling, API errors, navigation and keyboard/safe-area layout, charts, date selection, biometrics, and file picking/sharing. Test destructive restore only with isolated test data. SDK 56+ changes the global fetch implementation, so API behavior needs device verification even though the app's API code is unchanged.
+
+The development build profile still needs a development client and a distinct application identity before installing it alongside the Play Store app. The mobile API currently points to the production backend; a separate app identity alone does not isolate financial data.
+
+Use `npm audit` to review remaining upstream advisories; do not use `npm audit fix --force` to override Expo's supported native versions. The upgrade is not a security certification or a Play Store release.
 
 ## Deployment (web)
 

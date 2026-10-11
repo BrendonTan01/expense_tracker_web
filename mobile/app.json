@@ -6,12 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0b1220"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.brendontan.expensetracker"
@@ -21,13 +15,20 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0b1220"
       },
-      "edgeToEdgeEnabled": true,
       "package": "com.brendontan.expensetracker"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0b1220"
+        }
+      ],
       "./plugins/withGradleJvmArgs.js",
       [
         "expo-build-properties",
@@ -45,7 +46,9 @@
           "iCloudContainerEnvironment": "Production"
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {
