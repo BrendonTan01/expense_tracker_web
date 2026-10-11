@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import { File } from 'expo-file-system';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
 import { downloadBackup, importFromJSON } from '../utils/backup';
@@ -35,7 +35,7 @@ export default function BackupScreen() {
       const file = result.assets[0];
       setImporting(true);
 
-      const content = await FileSystem.readAsStringAsync(file.uri);
+      const content = await new File(file.uri).text();
       const backup = importFromJSON(content);
 
       Alert.alert(

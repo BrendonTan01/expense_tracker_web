@@ -1136,7 +1136,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
               <XAxis dataKey="period" stroke="var(--text-muted)" tick={{ fill: 'var(--text-color)' }} />
               <YAxis stroke="var(--text-muted)" tick={{ fill: 'var(--text-color)' }} />
-              <Tooltip formatter={(value: number | undefined) => value !== undefined ? formatCurrency(value) : ''} />
+              <Tooltip formatter={(value) => typeof value === 'number' ? formatCurrency(value) : ''} />
               <Legend />
               <Line type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} name="Income" />
               <Line type="monotone" dataKey="expenses" stroke="#ef4444" strokeWidth={2} name="Expenses" />
@@ -1468,7 +1468,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number | undefined) => formatCurrency(value || 0)} />
+                <Tooltip formatter={(value) => typeof value === 'number' ? formatCurrency(value) : ''} />
                 {isMobile && <Legend 
                   wrapperStyle={{ paddingTop: '20px' }}
                   formatter={(value) => {

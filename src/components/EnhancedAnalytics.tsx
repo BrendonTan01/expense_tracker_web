@@ -141,7 +141,7 @@ export default function EnhancedAnalytics({ transactions, buckets }: EnhancedAna
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="period" />
               <YAxis />
-              <Tooltip formatter={(value: number | undefined) => value !== undefined ? formatCurrency(value) : ''} />
+              <Tooltip formatter={(value) => typeof value === 'number' ? formatCurrency(value) : ''} />
               <Legend />
               <Line type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} name="Income" />
               <Line type="monotone" dataKey="expenses" stroke="#ef4444" strokeWidth={2} name="Expenses" />

@@ -98,7 +98,7 @@ npx expo start
 - **EAS project**: configured in `mobile/app.json` / `mobile/eas.json`
 - **Play Store**: published as an **unlisted** listing for personal use (not publicly discoverable)
 
-Production mobile builds and submits use Expo EAS (`eas build` / `eas submit`) from the `mobile/` directory.
+Production mobile builds and submits use Expo EAS (`npx eas-cli@latest build` / `npx eas-cli@latest submit`) from the `mobile/` directory. EAS CLI is run separately rather than bundled into the app dependencies.
 
 ## Deployment (web)
 

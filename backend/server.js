@@ -49,7 +49,7 @@ if (!isDevelopment) {
   app.use(express.static(distPath));
   
   // Handle React routing, return all requests to React app
-  app.get('*', (req, res) => {
+  app.get('/{*splat}', (req, res) => {
     res.sendFile(join(distPath, 'index.html'));
   });
 }
