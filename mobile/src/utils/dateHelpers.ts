@@ -120,6 +120,7 @@ function lastDayOfMonth(year: number, monthIndex: number): number {
   return new Date(year, monthIndex + 1, 0).getDate();
 }
 
+/** First scheduled occurrence after lastApplied, or the start when never applied. */
 export function getNextOccurrence(
   frequency: RecurringFrequency,
   startDate: string,
@@ -127,55 +128,9 @@ export function getNextOccurrence(
 ): string {
   const startIso = normalizeIsoDate(startDate);
   if (!startIso) return todayIsoLocal();
-
-  try {
-    const start = parseIsoDateLocal(startIso);
-    if (isNaN(start.getTime())) return todayIsoLocal();
-
-    const baseIso = normalizeIsoDate(lastApplied) || startIso;
-    const base = parseIsoDateLocal(baseIso);
-    if (isNaN(base.getTime())) return startIso;
-
-    const next = new Date(base.getFullYear(), base.getMonth(), base.getDate(), 0, 0, 0, 0);
-
-    switch (frequency) {
-      case 'daily':
-        next.setDate(next.getDate() + 1);
-        break;
-      case 'weekly':
-        next.setDate(next.getDate() + 7);
-        break;
-      case 'fortnightly':
-        next.setDate(next.getDate() + 14);
-        break;
-      case 'monthly': {
-        const desiredDay = start.getDate();
-        const y = next.getFullYear();
-        const m = next.getMonth() + 1;
-        const last = lastDayOfMonth(y, m);
-        const dayToUse = Math.min(desiredDay, last);
-        next.setFullYear(y);
-        next.setMonth(m);
-        next.setDate(dayToUse);
-        break;
-      }
-      case 'yearly': {
-        const desiredMonth = start.getMonth();
-        const desiredDay = start.getDate();
-        const y = next.getFullYear() + 1;
-        const last = lastDayOfMonth(y, desiredMonth);
-        next.setFullYear(y);
-        next.setMonth(desiredMonth);
-        next.setDate(Math.min(desiredDay, last));
-        break;
-      }
-    }
-
-    return formatIsoDateLocal(next);
-  } catch (error) {
-    console.error('Error calculating next occurrence:', error);
-    return todayIsoLocal();
-  }
+  const previous = normalizeIsoDate(lastApplied);
+  if (!previous || previous < startIso) return startIso;
+  return firstOccurrenceOnOrAfter(frequency, startIso, addDaysIsoLocal(previous, 1));
 }
 
 export function shouldGenerateTransaction(
@@ -184,17 +139,16 @@ export function shouldGenerateTransaction(
   endDate: string | undefined,
   lastApplied: string | undefined
 ): boolean {
-  const today = todayIsoLocal();
   const start = normalizeIsoDate(startDate);
   if (!start) return false;
-  if (start > today) return false;
+  const today = todayIsoLocal();
   const end = normalizeIsoDate(endDate);
-  if (end && end < today) return false;
-  if (!lastApplied) return start <= today;
-  const next = getNextOccurrence(frequency, start, lastApplied);
-  return next <= today;
+  const cutoff = end && end < today ? end : today;
+  // An ended schedule can still have unapplied occurrences before its end date.
+  return getNextOccurrence(frequency, start, lastApplied) <= cutoff;
 }
 
+/** All scheduled dates up to the requested cutoff, respecting the end date. */
 export function getOccurrenceDatesUpTo(
   frequency: RecurringFrequency,
   startDate: string,
@@ -229,57 +183,35 @@ function firstOccurrenceOnOrAfter(
   const start = parseIsoDateLocal(startIso);
   const target = parseIsoDateLocal(targetIso);
   if (isNaN(start.getTime()) || isNaN(target.getTime())) return startIso;
-  if (start >= target) return startIso;
+  if (startIso >= targetIso) return startIso;
 
   if (frequency === 'daily' || frequency === 'weekly' || frequency === 'fortnightly') {
     const stepDays = frequency === 'daily' ? 1 : frequency === 'weekly' ? 7 : 14;
-    const diffDays = Math.floor((target.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    const n = Math.ceil(diffDays / stepDays);
-    return formatIsoDateLocal(new Date(start.getFullYear(), start.getMonth(), start.getDate() + n * stepDays));
+    // Count calendar days, not elapsed hours: local days can have 23 or 25 hours.
+    const dayNumber = (date: Date) => Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000;
+    const offset = Math.ceil((dayNumber(target) - dayNumber(start)) / stepDays) * stepDays;
+    return addDaysIsoLocal(startIso, offset);
   }
 
   if (frequency === 'monthly') {
-    const desiredDay = start.getDate();
-    const monthsDiff =
-      (target.getFullYear() - start.getFullYear()) * 12 + (target.getMonth() - start.getMonth());
-    let offset = Math.max(0, monthsDiff);
-    while (offset < monthsDiff + 3) {
-      const y = start.getFullYear() + Math.floor((start.getMonth() + offset) / 12);
-      const m = (start.getMonth() + offset) % 12;
-      const day = Math.min(desiredDay, lastDayOfMonth(y, m));
-      const candidate = new Date(y, m, day, 0, 0, 0, 0);
-      if (candidate >= target) return formatIsoDateLocal(candidate);
-      offset += 1;
-    }
-    let cur = startIso;
-    while (cur < targetIso) {
-      const next = getNextOccurrence('monthly', startIso, cur);
-      if (next === cur) break;
-      cur = next;
-    }
-    return cur;
+    let monthOffset = (target.getFullYear() - start.getFullYear()) * 12 + target.getMonth() - start.getMonth();
+    const occurrence = (offset: number) => {
+      const month = new Date(start.getFullYear(), start.getMonth() + offset, 1);
+      return formatIsoDateLocal(new Date(month.getFullYear(), month.getMonth(),
+        Math.min(start.getDate(), lastDayOfMonth(month.getFullYear(), month.getMonth()))));
+    };
+    if (occurrence(monthOffset) < targetIso) monthOffset += 1;
+    return occurrence(monthOffset);
   }
 
-  const desiredMonth = start.getMonth();
-  const desiredDay = start.getDate();
-  const yearsDiff = target.getFullYear() - start.getFullYear();
-  let offset = Math.max(0, yearsDiff);
-  while (offset < yearsDiff + 3) {
-    const y = start.getFullYear() + offset;
-    const day = Math.min(desiredDay, lastDayOfMonth(y, desiredMonth));
-    const candidate = new Date(y, desiredMonth, day, 0, 0, 0, 0);
-    if (candidate >= target) return formatIsoDateLocal(candidate);
-    offset += 1;
-  }
-  let cur = startIso;
-  while (cur < targetIso) {
-    const next = getNextOccurrence('yearly', startIso, cur);
-    if (next === cur) break;
-    cur = next;
-  }
-  return cur;
+  let year = target.getFullYear();
+  const occurrence = (y: number) => formatIsoDateLocal(new Date(y, start.getMonth(),
+    Math.min(start.getDate(), lastDayOfMonth(y, start.getMonth()))));
+  if (occurrence(year) < targetIso) year += 1;
+  return occurrence(year);
 }
 
+/** Returns scheduled dates within the inclusive range, respecting endDate. */
 export function getOccurrenceDatesBetween(
   frequency: RecurringFrequency,
   startDate: string,

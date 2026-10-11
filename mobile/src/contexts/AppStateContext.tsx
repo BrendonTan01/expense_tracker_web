@@ -1,15 +1,14 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { AppState, Bucket, Transaction, RecurringTransaction, Budget } from '../types';
 import { appStateApi, bucketsApi, transactionsApi, recurringApi, budgetsApi } from '../utils/api';
 import { useAuth } from './AuthContext';
-import { todayIsoLocal, getOccurrenceDatesUpTo } from '../utils/dateHelpers';
-import { generateId } from '../utils/storage';
+import { todayIsoLocal } from '../utils/dateHelpers';
 
 interface AppStateContextType {
   state: AppState;
   loading: boolean;
   error: string | null;
-  refreshAll: () => Promise<void>;
+  refreshAll: (processRecurring?: boolean) => Promise<void>;
   // Buckets
   addBucket: (bucket: Bucket) => Promise<void>;
   updateBucket: (id: string, updates: Partial<Bucket>) => Promise<void>;
@@ -40,76 +39,34 @@ const EMPTY_STATE: AppState = {
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const userIdRef = useRef(user?.id);
+  userIdRef.current = user?.id;
   const [state, setState] = useState<AppState>(EMPTY_STATE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refreshAll = useCallback(async () => {
+  const refreshAll = useCallback(async (processRecurring = true) => {
     if (!user) return;
     setLoading(true);
     setError(null);
     try {
       const data = await appStateApi.load();
+      if (userIdRef.current !== user.id) return;
       setState(data);
       // Generate recurring transactions
-      await generateRecurringTransactions(data);
+      if (processRecurring && data.recurringTransactions.length) {
+        const result = await recurringApi.process(todayIsoLocal());
+        if (result.available === false) return;
+        const processed = await appStateApi.load();
+        if (userIdRef.current === user.id) setState(processed);
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to load data');
+      if (userIdRef.current === user.id) setError(err.message || 'Failed to load data');
+      if (!processRecurring) throw err;
     } finally {
-      setLoading(false);
+      if (userIdRef.current === user.id) setLoading(false);
     }
   }, [user]);
-
-  const generateRecurringTransactions = useCallback(async (currentState: AppState) => {
-    const today = todayIsoLocal();
-    let hasNewTransactions = false;
-
-    for (const recurring of currentState.recurringTransactions) {
-      const dates = getOccurrenceDatesUpTo(
-        recurring.frequency,
-        recurring.startDate,
-        recurring.endDate,
-        recurring.lastApplied,
-        today
-      );
-
-      for (const date of dates) {
-        const newTransaction: any = {
-          id: generateId(),
-          ...recurring.transaction,
-          date,
-          isRecurring: true,
-          recurringId: recurring.id,
-        };
-
-        try {
-          await transactionsApi.create(newTransaction);
-          hasNewTransactions = true;
-        } catch (err) {
-          console.error('Failed to generate recurring transaction:', err);
-        }
-      }
-
-      if (dates.length > 0) {
-        const lastDate = dates[dates.length - 1];
-        try {
-          await recurringApi.update(recurring.id, { lastApplied: lastDate });
-        } catch (err) {
-          console.error('Failed to update lastApplied:', err);
-        }
-      }
-    }
-
-    if (hasNewTransactions) {
-      // Reload to get the new transactions
-      try {
-        const data = await appStateApi.load();
-        setState(data);
-      } catch (err) {
-        console.error('Failed to reload after generating recurring transactions:', err);
-      }
-    }
-  }, []);
 
   useEffect(() => {
     if (user) {

@@ -1,3 +1,4 @@
+import { parseMoneyInput, getMoneyInputError } from '../utils/money';
 import { useState, useMemo } from 'react';
 import { Budget, Bucket } from '../types';
 
@@ -26,6 +27,8 @@ export default function BudgetManager({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [bucketId, setBucketId] = useState('');
   const [amount, setAmount] = useState('');
+  const [amountTouched, setAmountTouched] = useState(false);
+  const amountError = getMoneyInputError(amount, amountTouched);
   const [period, setPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [month, setMonth] = useState((new Date().getMonth() + 1).toString());
@@ -35,6 +38,8 @@ export default function BudgetManager({
   const [bulkEditGroup, setBulkEditGroup] = useState<MonthlyBudgetGroup | null>(null);
   const [selectedMonths, setSelectedMonths] = useState<Set<number>>(new Set());
   const [bulkAmount, setBulkAmount] = useState('');
+  const [bulkAmountTouched, setBulkAmountTouched] = useState(false);
+  const bulkAmountError = getMoneyInputError(bulkAmount, bulkAmountTouched);
 
   // Group monthly budgets by bucket and year
   const monthlyGroups = useMemo(() => {
@@ -69,8 +74,9 @@ export default function BudgetManager({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) return;
+    setAmountTouched(true);
+    const numAmount = parseMoneyInput(amount);
+    if (numAmount === null) return;
     if (!bucketId) return;
 
     if (editingId) {
@@ -136,6 +142,7 @@ export default function BudgetManager({
     setEditingId(null);
     setBucketId('');
     setAmount('');
+    setAmountTouched(false);
     setPeriod('monthly');
     setYear(new Date().getFullYear().toString());
     setMonth((new Date().getMonth() + 1).toString());
@@ -143,12 +150,14 @@ export default function BudgetManager({
     setBulkEditGroup(null);
     setSelectedMonths(new Set());
     setBulkAmount('');
+    setBulkAmountTouched(false);
   };
 
   const handleEdit = (budget: Budget) => {
     setEditingId(budget.id);
     setBucketId(budget.bucketId);
     setAmount(budget.amount.toString());
+    setAmountTouched(false);
     setPeriod(budget.period);
     setYear(budget.year.toString());
     setMonth(budget.month?.toString() || (new Date().getMonth() + 1).toString());
@@ -170,12 +179,14 @@ export default function BudgetManager({
     const amounts = group.budgets.map(b => b.amount);
     const avgAmount = amounts.reduce((a, b) => a + b, 0) / amounts.length;
     setBulkAmount(avgAmount.toFixed(2));
+    setBulkAmountTouched(false);
   };
 
   const cancelBulkEdit = () => {
     setBulkEditGroup(null);
     setSelectedMonths(new Set());
     setBulkAmount('');
+    setBulkAmountTouched(false);
   };
 
   const toggleMonthSelection = (month: number) => {
@@ -199,9 +210,10 @@ export default function BudgetManager({
   };
 
   const handleBulkUpdate = async () => {
+    setBulkAmountTouched(true);
     if (!bulkEditGroup || selectedMonths.size === 0) return;
-    const numAmount = parseFloat(bulkAmount);
-    if (isNaN(numAmount) || numAmount <= 0) return;
+    const numAmount = parseMoneyInput(bulkAmount);
+    if (numAmount === null) return;
 
     // Update all selected months - include all required fields
     // Use Promise.allSettled to handle errors gracefully
@@ -284,14 +296,18 @@ export default function BudgetManager({
           <div className="form-group">
             <label>Amount</label>
             <input
-              type="number"
-              step="0.01"
-              min="0.01"
+              type="text" inputMode="decimal"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              onBlur={() => setAmountTouched(true)}
+              onInvalid={(e) => { e.preventDefault(); setAmountTouched(true); }}
+              aria-invalid={Boolean(amountError)}
+              aria-describedby={amountError ? 'budget-amount-error' : undefined}
+              style={amountError ? { borderColor: 'var(--danger-color)' } : undefined}
               className="input"
               required
             />
+            {amountError && <p id="budget-amount-error" aria-live="polite" style={{ color: 'var(--danger-color)', fontSize: '12px', marginTop: '6px' }}>{amountError}</p>}
           </div>
 
           <div className="form-group">
@@ -399,14 +415,18 @@ export default function BudgetManager({
           <div className="form-group">
             <label>Amount (applies to all selected months)</label>
             <input
-              type="number"
-              step="0.01"
-              min="0.01"
+              type="text" inputMode="decimal"
               value={bulkAmount}
               onChange={(e) => setBulkAmount(e.target.value)}
+              onBlur={() => setBulkAmountTouched(true)}
+              onInvalid={(e) => { e.preventDefault(); setBulkAmountTouched(true); }}
+              aria-invalid={Boolean(bulkAmountError)}
+              aria-describedby={bulkAmountError ? 'bulk-budget-amount-error' : undefined}
+              style={bulkAmountError ? { borderColor: 'var(--danger-color)' } : undefined}
               className="input"
               required
             />
+            {bulkAmountError && <p id="bulk-budget-amount-error" aria-live="polite" style={{ color: 'var(--danger-color)', fontSize: '12px', marginTop: '6px' }}>{bulkAmountError}</p>}
           </div>
 
           <div className="form-group">
@@ -486,7 +506,7 @@ export default function BudgetManager({
               type="button" 
               onClick={handleBulkUpdate} 
               className="btn btn-primary"
-              disabled={selectedMonths.size === 0 || !bulkAmount || parseFloat(bulkAmount) <= 0}
+              disabled={selectedMonths.size === 0}
             >
               Update {selectedMonths.size} Budget{selectedMonths.size !== 1 ? 's' : ''}
             </button>

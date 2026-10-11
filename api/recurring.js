@@ -1,6 +1,12 @@
+import backupHandler from '../lib/backup.js';
+import { isDate } from '../lib/validation.js';
+import { rpcErrorResponse } from '../lib/reliability.js';
+import { isValidAmount, MONEY_ERROR, checkOwnedReferences } from '../lib/validation.js';
 import { getAuthenticatedClient } from '../lib/supabase.js';
 
 export default async function handler(req, res) {
+  // Reuse this function to remain within the existing Vercel function count.
+  if (req.query?.action === 'backup') return backupHandler(req, res);
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -18,6 +24,19 @@ export default async function handler(req, res) {
     
     if (authError) {
       return res.status(401).json({ error: authError });
+    }
+
+    if (req.method === 'GET' && req.query?.action === 'capabilities') {
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json({ recurringProcessing: true });
+    }
+
+    if (req.method === 'POST' && req.query?.action === 'process') {
+      const today = req.body?.today;
+      if (!isDate(today)) return res.status(400).json({ error: 'today must be a valid YYYY-MM-DD date' });
+      const { data, error } = await supabase.rpc('process_recurring_transactions', { p_today: today });
+      if (error) return rpcErrorResponse(res, error);
+      return res.status(200).json(data);
     }
 
     if (req.method === 'GET') {
@@ -62,6 +81,11 @@ export default async function handler(req, res) {
       if (!['expense', 'income', 'investment'].includes(transaction.type)) {
         return res.status(400).json({ error: 'transaction.type must be either "expense", "income", or "investment"' });
       }
+
+      if (!isDate(startDate) || (endDate && (!isDate(endDate) || endDate < startDate)) || (lastApplied && !isDate(lastApplied))) return res.status(400).json({ error: 'Invalid recurring dates' });
+      if (!isValidAmount(transaction.amount)) return res.status(400).json({ error: MONEY_ERROR });
+      const referenceError = await checkOwnedReferences(supabase, user.id, transaction);
+      if (referenceError) return res.status(400).json({ error: referenceError });
 
       // Include user_id in the insert - RLS policy will verify it matches auth.uid()
       const { data, error } = await supabase

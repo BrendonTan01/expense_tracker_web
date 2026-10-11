@@ -1,3 +1,4 @@
+import { parseMoneyInput, getMoneyInputError } from '../utils/money';
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity, TextInput,
@@ -35,6 +36,8 @@ export default function RecurringScreen() {
   // Form state
   const [type, setType] = useState<'expense' | 'income' | 'investment'>('expense');
   const [amount, setAmount] = useState('');
+  const [amountTouched, setAmountTouched] = useState(false);
+  const amountError = getMoneyInputError(amount, amountTouched);
   const [description, setDescription] = useState('');
   const [bucketId, setBucketId] = useState<string | undefined>();
   const [frequency, setFrequency] = useState<RecurringFrequency>('monthly');
@@ -47,6 +50,7 @@ export default function RecurringScreen() {
   const openAdd = () => {
     setEditing(null);
     setType('expense');
+    setAmountTouched(false);
     setAmount('');
     setDescription('');
     setBucketId(undefined);
@@ -60,6 +64,7 @@ export default function RecurringScreen() {
   const openEdit = (r: RecurringTransaction) => {
     setEditing(r);
     setType(r.transaction.type);
+    setAmountTouched(false);
     setAmount(r.transaction.amount.toString());
     setDescription(r.transaction.description);
     setBucketId(r.transaction.bucketId);
@@ -71,14 +76,16 @@ export default function RecurringScreen() {
   };
 
   const handleSave = async () => {
+    setAmountTouched(true);
+    const numAmount = parseMoneyInput(amount);
+    if (numAmount === null) return;
     if (!description.trim()) { Alert.alert('Error', 'Enter a description'); return; }
-    if (!amount || parseFloat(amount) <= 0) { Alert.alert('Error', 'Enter a valid amount'); return; }
     if (type === 'expense' && !bucketId) { Alert.alert('Error', 'Select a bucket'); return; }
 
     try {
       const data: RecurringTransaction = {
         id: editing?.id || generateId(),
-        transaction: { type, amount: parseFloat(amount), description: description.trim(), bucketId: type === 'expense' ? bucketId : undefined },
+        transaction: { type, amount: numAmount, description: description.trim(), bucketId: type === 'expense' ? bucketId : undefined },
         frequency,
         startDate,
         endDate: hasEndDate ? endDate : undefined,
@@ -178,7 +185,10 @@ export default function RecurringScreen() {
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Amount</Text>
-                <TextInput style={styles.input} value={amount} onChangeText={setAmount} placeholder="0.00" placeholderTextColor={theme.colors.textTertiary} keyboardType="decimal-pad" />
+                <TextInput style={[styles.input, amountError && styles.inputError]} value={amount} onChangeText={setAmount}
+                  onBlur={() => setAmountTouched(true)} accessibilityLabel="Amount" accessibilityHint={amountError || 'Enter the recurring amount'}
+                  placeholder="0.00" placeholderTextColor={theme.colors.textTertiary} keyboardType="decimal-pad" />
+                {amountError && <Text style={styles.fieldError} accessibilityLiveRegion="polite">{amountError}</Text>}
               </View>
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Description</Text>
@@ -278,6 +288,8 @@ function createStyles(theme: any) {
     typeBtnText: { fontSize: theme.fontSize.sm, fontWeight: '600', color: theme.colors.textSecondary },
     inputGroup: { marginBottom: theme.spacing.lg },
     label: { fontSize: theme.fontSize.sm, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: theme.spacing.xs, textTransform: 'uppercase', letterSpacing: 0.5 },
+    inputError: { borderColor: theme.colors.danger },
+    fieldError: { color: theme.colors.danger, fontSize: theme.fontSize.sm, marginTop: 6 },
     input: { backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.borderRadius.md, padding: theme.spacing.md, fontSize: theme.fontSize.md, color: theme.colors.text },
     bucketChip: { paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, borderRadius: theme.borderRadius.full, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, marginRight: theme.spacing.sm },
     bucketChipText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },

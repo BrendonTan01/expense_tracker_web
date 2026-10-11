@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const STORAGE_PREFIX = '@expense_tracker/';
+import { ENV_STORAGE_PREFIX } from './environment';
+
+const STORAGE_PREFIX = `@expense_tracker/${ENV_STORAGE_PREFIX}`;
 
 export function getStorageKey(key: string): string {
   return `${STORAGE_PREFIX}${key}`;

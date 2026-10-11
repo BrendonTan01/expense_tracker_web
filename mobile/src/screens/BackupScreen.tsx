@@ -1,17 +1,17 @@
+import { useAuth } from '../contexts/AuthContext';
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator,
 } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
-import { downloadBackup, importFromJSON } from '../utils/backup';
+import { downloadBackup, pickBackup } from '../utils/backup';
 import { hapticSelection } from '../utils/haptics';
-import { bucketsApi, transactionsApi, recurringApi, budgetsApi } from '../utils/api';
+import { backupApi } from '../utils/api';
 
 export default function BackupScreen() {
   const { theme } = useTheme();
+  const { user } = useAuth();
   const { state, refreshAll } = useAppState();
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -19,7 +19,7 @@ export default function BackupScreen() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      await downloadBackup(state);
+      await downloadBackup(await backupApi.export());
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to export backup');
     } finally {
@@ -28,15 +28,10 @@ export default function BackupScreen() {
   };
 
   const handleImport = async () => {
+    setImporting(true);
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: 'application/json' });
-      if (result.canceled) return;
-
-      const file = result.assets[0];
-      setImporting(true);
-
-      const content = await new File(file.uri).text();
-      const backup = importFromJSON(content);
+      const backup = await pickBackup();
+      if (!backup) { setImporting(false); return; }
 
       Alert.alert(
         'Restore Backup',
@@ -48,19 +43,12 @@ export default function BackupScreen() {
             style: 'destructive',
             onPress: async () => {
               try {
-                // Delete existing data
-                for (const b of state.buckets) await bucketsApi.delete(b.id).catch(() => {});
-                for (const t of state.transactions) await transactionsApi.delete(t.id).catch(() => {});
-                for (const r of state.recurringTransactions) await recurringApi.delete(r.id).catch(() => {});
-                for (const b of state.budgets) await budgetsApi.delete(b.id).catch(() => {});
-
-                // Import new data
-                for (const b of backup.data.buckets) await bucketsApi.create(b).catch(() => {});
-                for (const t of backup.data.transactions) await transactionsApi.create(t).catch(() => {});
-                for (const r of backup.data.recurringTransactions) await recurringApi.create(r).catch(() => {});
-                for (const b of backup.data.budgets) await budgetsApi.create(b).catch(() => {});
-
-                await refreshAll();
+                if (!user) throw new Error('Sign in before restoring a backup.');
+                await backupApi.restore(backup, user.id);
+                try { await refreshAll(false); } catch {
+                  Alert.alert('Backup restored', 'Your backup was saved, but the screen could not refresh. Reopen the app to load it.');
+                  return;
+                }
                 Alert.alert('Success', 'Backup restored successfully');
               } catch (err: any) {
                 Alert.alert('Error', err.message || 'Failed to restore backup');
@@ -88,12 +76,12 @@ export default function BackupScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Export</Text>
           <Text style={styles.cardDesc}>
-            Download a backup of all your data: {state.buckets.length} buckets, {state.transactions.length} transactions, {state.recurringTransactions.length} recurring, {state.budgets.length} budgets
+            Download your saved account data: {state.buckets.length} buckets, {state.transactions.length} transactions, {state.recurringTransactions.length} recurring, {state.budgets.length} budgets, plus monthly and yearly reflections. Device templates and preferences are not included.
           </Text>
           <TouchableOpacity
             style={[styles.exportBtn, exporting && { opacity: 0.6 }]}
             onPress={() => { hapticSelection(); handleExport(); }}
-            disabled={exporting}
+            disabled={exporting || importing}
           >
             {exporting ? <ActivityIndicator color="#fff" /> : <Text style={styles.exportBtnText}>Export Backup</Text>}
           </TouchableOpacity>
@@ -102,12 +90,12 @@ export default function BackupScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Import</Text>
           <Text style={styles.cardDesc}>
-            Restore from a JSON backup file. This will replace all current data.
+            Restore from a JSON backup file. This replaces saved account records together. Older backups without reflections leave existing reflections unchanged. Device templates and preferences are not included.
           </Text>
           <TouchableOpacity
             style={[styles.importBtn, importing && { opacity: 0.6 }]}
             onPress={() => { hapticSelection(); handleImport(); }}
-            disabled={importing}
+            disabled={importing || exporting}
           >
             {importing ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={styles.importBtnText}>Import Backup</Text>}
           </TouchableOpacity>

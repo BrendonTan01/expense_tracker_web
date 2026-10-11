@@ -1,3 +1,4 @@
+import { parseMoneyInput, getMoneyInputError } from '../utils/money';
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
@@ -24,6 +25,9 @@ export default function TransactionFormScreen({ navigation, route }: any) {
 
   const [type, setType] = useState<'expense' | 'income' | 'investment'>(editTransaction?.type || templateFromNav?.type || 'expense');
   const [amount, setAmount] = useState(editTransaction ? editTransaction.amount.toString() : (templateFromNav?.amount?.toString() ?? ''));
+  const [amountTouched, setAmountTouched] = useState(false);
+  const [bucketTouched, setBucketTouched] = useState(false);
+  const amountError = getMoneyInputError(amount, amountTouched);
   const [description, setDescription] = useState(editTransaction?.description || templateFromNav?.description || '');
   const [bucketId, setBucketId] = useState<string | undefined>(editTransaction?.bucketId ?? templateFromNav?.bucketId);
   const [date, setDate] = useState(editTransaction?.date || todayIsoLocal());
@@ -34,8 +38,17 @@ export default function TransactionFormScreen({ navigation, route }: any) {
   const [loading, setLoading] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<{ message: string; similar: Transaction[] } | null>(null);
 
+  const hasBucket = state.buckets.some(bucket => bucket.id === bucketId);
+  const needsFirstBucket = type === 'expense' && state.buckets.length === 0;
+
+  const openBucketSetup = () => {
+    hapticSelection();
+    navigation.push('TransactionBuckets', { returnToTransaction: true });
+  };
+
   useEffect(() => {
     if (templateFromNav) {
+      setAmountTouched(false);
       setType(templateFromNav.type);
       setAmount(templateFromNav.amount?.toString() ?? '');
       setDescription(templateFromNav.description);
@@ -45,14 +58,19 @@ export default function TransactionFormScreen({ navigation, route }: any) {
     }
   }, [templateFromNav?.id]);
 
+  // Select the first bucket after setup without clearing the transaction draft.
+  useEffect(() => {
+    if (!hasBucket && state.buckets.length === 1) setBucketId(state.buckets[0].id);
+  }, [hasBucket, state.buckets]);
+
   // Duplicate detection for new transactions (not when editing)
   useEffect(() => {
     if (isEditing || !amount || !description) {
       setDuplicateWarning(null);
       return;
     }
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
+    const numAmount = parseMoneyInput(amount);
+    if (numAmount === null) {
       setDuplicateWarning(null);
       return;
     }
@@ -80,6 +98,7 @@ export default function TransactionFormScreen({ navigation, route }: any) {
   }, [isEditing, type, amount, description, bucketId, date, tags, notes, state.transactions]);
 
   const handleUseTemplate = (template: TransactionTemplate) => {
+    setAmountTouched(false);
     setType(template.type);
     setAmount(template.amount?.toString() ?? '');
     setDescription(template.description);
@@ -91,16 +110,14 @@ export default function TransactionFormScreen({ navigation, route }: any) {
   const styles = createStyles(theme);
 
   const handleSave = async () => {
+    setAmountTouched(true);
+    if (parseMoneyInput(amount) === null) return;
     if (!description.trim()) {
       Alert.alert('Error', 'Please enter a description');
       return;
     }
-    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
-      return;
-    }
-    if (type === 'expense' && !bucketId) {
-      Alert.alert('Error', 'Please select a bucket for expenses');
+    if (type === 'expense' && !hasBucket) {
+      setBucketTouched(true);
       return;
     }
 
@@ -121,11 +138,14 @@ export default function TransactionFormScreen({ navigation, route }: any) {
   };
 
   const performSave = async () => {
+    const numAmount = parseMoneyInput(amount);
+    if (numAmount === null) { setAmountTouched(true); return; }
+    if (type === 'expense' && !hasBucket) { setBucketTouched(true); return; }
     setLoading(true);
     try {
       const txnData = {
         type,
-        amount: parseFloat(amount),
+        amount: numAmount,
         description: description.trim(),
         bucketId: type === 'expense' ? bucketId : undefined,
         date,
@@ -208,19 +228,34 @@ export default function TransactionFormScreen({ navigation, route }: any) {
           ))}
         </View>
 
+        {needsFirstBucket && (
+          <View style={styles.setupCard}>
+            <Text style={styles.setupTitle}>Create your first bucket</Text>
+            <Text style={styles.setupText}>Expenses need a bucket, such as Groceries or Transport. Create one to save this expense. Your draft will stay here.</Text>
+            <TouchableOpacity style={styles.setupButton} onPress={openBucketSetup}
+              accessibilityRole="button" accessibilityLabel="Create your first bucket">
+              <Text style={styles.setupButtonText}>Create bucket</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Amount */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Amount</Text>
           <TextInput
-            style={[styles.input, styles.amountInput]}
+            style={[styles.input, styles.amountInput, amountError && styles.inputError]}
             value={amount}
             onChangeText={setAmount}
+            onBlur={() => setAmountTouched(true)}
             placeholder="0.00"
             placeholderTextColor={theme.colors.textTertiary}
             keyboardType="decimal-pad"
             accessibilityLabel="Amount"
-            accessibilityHint="Enter the transaction amount"
+            accessibilityHint={amountError || "Enter the transaction amount"}
           />
+          {amountError && (
+            <Text style={styles.fieldError} accessibilityLiveRegion="polite">{amountError}</Text>
+          )}
         </View>
 
         {/* Description */}
@@ -238,7 +273,7 @@ export default function TransactionFormScreen({ navigation, route }: any) {
         </View>
 
         {/* Bucket (for expenses) */}
-        {type === 'expense' && (
+        {type === 'expense' && state.buckets.length > 0 && (
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Bucket</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bucketsScroll}>
@@ -258,6 +293,9 @@ export default function TransactionFormScreen({ navigation, route }: any) {
                 </TouchableOpacity>
               ))}
             </ScrollView>
+            {bucketTouched && !hasBucket && (
+              <Text style={styles.fieldError} accessibilityLiveRegion="polite">Choose a bucket for this expense.</Text>
+            )}
           </View>
         )}
 
@@ -340,9 +378,11 @@ export default function TransactionFormScreen({ navigation, route }: any) {
 
         {/* Save Button */}
         <TouchableOpacity
-          style={[styles.saveBtn, loading && { opacity: 0.6 }]}
+          style={[styles.saveBtn, (loading || needsFirstBucket) && { opacity: 0.6 }]}
           onPress={() => { hapticSelection(); handleSave(); }}
-          disabled={loading}
+          disabled={loading || needsFirstBucket}
+          accessibilityState={{ disabled: loading || needsFirstBucket }}
+          accessibilityHint={needsFirstBucket ? "Create a bucket above before saving an expense" : undefined}
           accessibilityRole="button"
           accessibilityLabel={isEditing ? 'Update transaction' : 'Add transaction'}
         >
@@ -394,6 +434,13 @@ function createStyles(theme: any) {
       fontSize: theme.fontSize.md,
       color: theme.colors.text,
     },
+    inputError: { borderColor: theme.colors.danger },
+    fieldError: { color: theme.colors.danger, fontSize: theme.fontSize.sm, marginTop: 6 },
+    setupCard: { padding: theme.spacing.md, marginBottom: theme.spacing.lg, backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderWidth: 1, borderRadius: theme.borderRadius.md },
+    setupTitle: { color: theme.colors.text, fontSize: theme.fontSize.md, fontWeight: '600' },
+    setupText: { color: theme.colors.textSecondary, fontSize: theme.fontSize.sm, lineHeight: 21, marginTop: theme.spacing.xs },
+    setupButton: { alignSelf: 'flex-start', backgroundColor: theme.colors.primary, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, minHeight: 44, justifyContent: 'center', borderRadius: theme.borderRadius.md, marginTop: theme.spacing.md },
+    setupButtonText: { color: '#fff', fontWeight: '600', fontSize: theme.fontSize.sm },
     amountInput: { fontSize: theme.fontSize.xxl, fontWeight: '700', textAlign: 'center' },
     bucketsScroll: { flexGrow: 0 },
     bucketChip: {

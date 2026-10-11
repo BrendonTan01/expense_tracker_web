@@ -1,3 +1,4 @@
+import { isDate, isValidAmount, MONEY_ERROR, checkOwnedReferences } from '../../lib/validation.js';
 import { getAuthenticatedClient } from '../../lib/supabase.js';
 
 export default async function handler(req, res) {
@@ -55,6 +56,11 @@ export default async function handler(req, res) {
       if (!type || amount === undefined || !description || !date) {
         return res.status(400).json({ error: 'type, amount, description, and date are required' });
       }
+
+      if (!isDate(date)) return res.status(400).json({ error: 'date must be a valid YYYY-MM-DD date' });
+      if (!isValidAmount(amount)) return res.status(400).json({ error: MONEY_ERROR });
+      const referenceError = await checkOwnedReferences(supabase, user.id, { bucketId, recurringId });
+      if (referenceError) return res.status(400).json({ error: referenceError });
 
       if (!['expense', 'income', 'investment'].includes(type)) {
         return res.status(400).json({ error: 'type must be either "expense", "income", or "investment"' });

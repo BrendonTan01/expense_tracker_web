@@ -1,3 +1,4 @@
+import { isValidAmount, MONEY_ERROR, checkOwnedReferences } from '../../../lib/validation.js';
 import { getAuthenticatedClient } from '../../../lib/supabase.js';
 
 export default async function handler(req, res) {
@@ -14,7 +15,7 @@ export default async function handler(req, res) {
 
   try {
     // Get authenticated Supabase client
-    const { supabase, error: authError } = await getAuthenticatedClient(req.headers);
+    const { supabase, user, error: authError } = await getAuthenticatedClient(req.headers);
 
     if (authError) {
       return res.status(401).json({ error: authError });
@@ -38,9 +39,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'transaction.type must be either "expense", "income", or "investment"' });
     }
 
-    if (transaction.amount === undefined || transaction.amount === null || Number.isNaN(Number(transaction.amount))) {
-      return res.status(400).json({ error: 'transaction.amount must be a number' });
-    }
+    if (!isValidAmount(transaction.amount)) return res.status(400).json({ error: MONEY_ERROR });
+    const referenceError = await checkOwnedReferences(supabase, user.id, { ...transaction, recurringId });
+    if (referenceError) return res.status(400).json({ error: referenceError });
 
     if (typeof transaction.description !== 'string' || transaction.description.length === 0) {
       return res.status(400).json({ error: 'transaction.description must be a non-empty string' });

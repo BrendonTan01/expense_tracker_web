@@ -7,6 +7,7 @@
 - `api/` and `lib/` are the Vercel API used by BOTH installed Android clients and the website. Supabase provides authentication and persistent data; `supabase/` contains schema and migrations.
 - `backend/` is a separate Express / SQLite alternative, not the production backend.
 - A push to `main` can deploy the shared API. A Play Store release is separate, but existing Android clients depend on backward-compatible API and database changes.
+- Brendon wants to focus on development and staging for now. Commit checkpoints when requested; do not update the live backend or Play Store app without explicit release authorization.
 - Check current package files and source rather than assuming recorded version numbers are still current.
 
 ## UI references — Brendon's preference
@@ -51,7 +52,7 @@ Choose checks that match the change; do not rerun unrelated checks or add tests 
 ## Current known follow-up work
 
 These are starting points to verify, not proof of current behavior:
-- Recurring generation needs database-enforced duplicate prevention and failure-safe progress updates.
-- Restore needs all-or-nothing behavior, dependency ordering, and complete exports; the file-reading compatibility fix did not solve restore integrity.
+- Reliability migration and hosted concurrency checks passed on isolated `expense-tracker-staging` (`tfjegsgjwyzcixlueosi`); see README evidence. `mobile/npm run start:staging` connects Expo to the isolated local API with separate login storage. Brendon confirmed the requested phone checks passed, including JSON restore after the file-picker fix. Production rollout remains deferred. Do not assume the production database has these guards.
+- New restore is transactional and exports six account tables; see README rollout notes. Older installed clients still have the unsafe multi-request restore; device-local templates/preferences are excluded.
 - Session refresh, account-scoped local storage, currency/date consistency, and account recovery/deletion need review.
 - Separate development app identity and test data from the installed production app.

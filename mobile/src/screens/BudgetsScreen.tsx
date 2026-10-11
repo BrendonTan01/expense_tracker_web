@@ -1,3 +1,4 @@
+import { parseMoneyInput, getMoneyInputError } from '../utils/money';
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity, TextInput,
@@ -17,6 +18,8 @@ export default function BudgetsScreen() {
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [selectedBucketId, setSelectedBucketId] = useState('');
   const [amount, setAmount] = useState('');
+  const [amountTouched, setAmountTouched] = useState(false);
+  const amountError = getMoneyInputError(amount, amountTouched);
   const [period, setPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth() + 1);
@@ -46,6 +49,7 @@ export default function BudgetsScreen() {
   const openAdd = () => {
     setEditingBudget(null);
     setSelectedBucketId(state.buckets[0]?.id || '');
+    setAmountTouched(false);
     setAmount('');
     setPeriod('monthly');
     setYear(now.getFullYear());
@@ -57,6 +61,7 @@ export default function BudgetsScreen() {
   const openEdit = (budget: Budget) => {
     setEditingBudget(budget);
     setSelectedBucketId(budget.bucketId);
+    setAmountTouched(false);
     setAmount(budget.amount.toString());
     setPeriod(budget.period);
     setYear(budget.year);
@@ -65,18 +70,20 @@ export default function BudgetsScreen() {
   };
 
   const handleSave = async () => {
+    setAmountTouched(true);
+    const numAmount = parseMoneyInput(amount);
+    if (numAmount === null) return;
     if (!selectedBucketId) { Alert.alert('Error', 'Please select a bucket'); return; }
-    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) { Alert.alert('Error', 'Please enter a valid amount'); return; }
 
     try {
       if (editingBudget) {
-        await updateBudget(editingBudget.id, { amount: parseFloat(amount) });
+        await updateBudget(editingBudget.id, { amount: numAmount });
       } else if (period === 'monthly' && applyAllMonths) {
         for (let m = 1; m <= 12; m++) {
           await addBudget({
             id: generateId(),
             bucketId: selectedBucketId,
-            amount: parseFloat(amount),
+            amount: numAmount,
             period: 'monthly',
             year,
             month: m,
@@ -86,7 +93,7 @@ export default function BudgetsScreen() {
         await addBudget({
           id: generateId(),
           bucketId: selectedBucketId,
-          amount: parseFloat(amount),
+          amount: numAmount,
           period,
           year,
           month: period === 'monthly' ? month : undefined,
@@ -192,13 +199,17 @@ export default function BudgetsScreen() {
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Amount</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, amountError && styles.inputError]}
                   value={amount}
                   onChangeText={setAmount}
+                  onBlur={() => setAmountTouched(true)}
+                  accessibilityLabel="Amount"
+                  accessibilityHint={amountError || "Enter an amount"}
                   placeholder="0.00"
                   placeholderTextColor={theme.colors.textTertiary}
                   keyboardType="decimal-pad"
                 />
+              {amountError && <Text style={styles.fieldError} accessibilityLiveRegion="polite">{amountError}</Text>}
               </View>
 
               {!editingBudget && (
@@ -268,6 +279,8 @@ function createStyles(theme: any) {
     modalTitle: { fontSize: theme.fontSize.xl, fontWeight: '700', color: theme.colors.text, marginBottom: theme.spacing.xl },
     inputGroup: { marginBottom: theme.spacing.lg },
     label: { fontSize: theme.fontSize.sm, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: theme.spacing.xs, textTransform: 'uppercase', letterSpacing: 0.5 },
+    inputError: { borderColor: theme.colors.danger },
+    fieldError: { color: theme.colors.danger, fontSize: theme.fontSize.sm, marginTop: 6 },
     input: { backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.borderRadius.md, padding: theme.spacing.md, fontSize: theme.fontSize.md, color: theme.colors.text },
     bucketChip: { paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, borderRadius: theme.borderRadius.full, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, marginRight: theme.spacing.sm },
     bucketChipText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },

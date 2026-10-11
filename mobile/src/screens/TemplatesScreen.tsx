@@ -1,3 +1,4 @@
+import { parseMoneyInput, getMoneyInputError } from '../utils/money';
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
@@ -28,6 +29,9 @@ export default function TemplatesScreen({ navigation }: any) {
     notes: '',
   });
   const [tagInput, setTagInput] = useState('');
+  const [amountInput, setAmountInput] = useState('');
+  const [amountTouched, setAmountTouched] = useState(false);
+  const amountError = getMoneyInputError(amountInput, amountTouched, true);
 
   useEffect(() => {
     loadFromStorage<TransactionTemplate[]>(STORAGE_KEY, []).then(setTemplates);
@@ -39,6 +43,9 @@ export default function TemplatesScreen({ navigation }: any) {
   };
 
   const handleSubmit = () => {
+    setAmountTouched(true);
+    const parsedAmount = amountInput.trim() === '' ? undefined : parseMoneyInput(amountInput);
+    if (parsedAmount === null) return;
     if (!formData.name?.trim() || !formData.description?.trim()) {
       Alert.alert('Error', 'Template name and description are required');
       return;
@@ -46,6 +53,7 @@ export default function TemplatesScreen({ navigation }: any) {
     const template: TransactionTemplate = {
       id: editingTemplate?.id || generateId(),
       ...formData,
+      amount: parsedAmount,
       bucketId: formData.type === 'expense' && formData.bucketId ? formData.bucketId : undefined,
     };
     if (editingTemplate) {
@@ -70,6 +78,8 @@ export default function TemplatesScreen({ navigation }: any) {
     setTagInput('');
     setShowForm(false);
     setEditingTemplate(null);
+    setAmountTouched(false);
+    setAmountInput('');
   };
 
   const handleDelete = (id: string) => {
@@ -81,6 +91,8 @@ export default function TemplatesScreen({ navigation }: any) {
 
   const handleEdit = (template: TransactionTemplate) => {
     setEditingTemplate(template);
+    setAmountTouched(false);
+    setAmountInput(template.amount?.toString() ?? '');
     setFormData({
       name: template.name,
       type: template.type,
@@ -112,6 +124,8 @@ export default function TemplatesScreen({ navigation }: any) {
       <TouchableOpacity style={styles.addBtn} onPress={() => {
         hapticSelection();
         setEditingTemplate(null);
+        setAmountTouched(false);
+        setAmountInput('');
         setFormData({ name: '', type: 'expense', amount: undefined, description: '', bucketId: '', tags: [], notes: '' });
         setTagInput('');
         setShowForm(true);
@@ -192,13 +206,17 @@ export default function TemplatesScreen({ navigation }: any) {
               />
               <Text style={styles.inputLabel}>Amount (optional)</Text>
               <TextInput
-                style={styles.input}
-                value={formData.amount?.toString() ?? ''}
-                onChangeText={v => setFormData({ ...formData, amount: v ? parseFloat(v) : undefined })}
+                style={[styles.input, amountError && styles.inputError]}
+                value={amountInput}
+                onChangeText={setAmountInput}
+                  onBlur={() => setAmountTouched(true)}
+                  accessibilityLabel="Amount"
+                  accessibilityHint={amountError || "Enter an amount"}
                 placeholder="0.00"
                 placeholderTextColor={theme.colors.textTertiary}
                 keyboardType="decimal-pad"
               />
+              {amountError && <Text style={styles.fieldError} accessibilityLiveRegion="polite">{amountError}</Text>}
               {formData.type === 'expense' && (
                 <>
                   <Text style={styles.inputLabel}>Bucket (optional)</Text>
@@ -315,6 +333,8 @@ function createStyles(theme: any) {
     modalTitle: { fontSize: theme.fontSize.xl, fontWeight: '700', color: theme.colors.text, marginBottom: theme.spacing.lg },
     formScroll: { maxHeight: 400 },
     inputLabel: { fontSize: theme.fontSize.sm, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: theme.spacing.xs, marginTop: theme.spacing.sm },
+    inputError: { borderColor: theme.colors.danger },
+    fieldError: { color: theme.colors.danger, fontSize: theme.fontSize.sm, marginTop: 6 },
     input: { backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.borderRadius.md, padding: theme.spacing.md, fontSize: theme.fontSize.md, color: theme.colors.text },
     typeRow: { flexDirection: 'row', gap: theme.spacing.sm },
     typeBtn: { flex: 1, paddingVertical: theme.spacing.sm, borderRadius: theme.borderRadius.md, backgroundColor: theme.colors.background, alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },

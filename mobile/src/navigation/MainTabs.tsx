@@ -10,6 +10,7 @@ import CalendarScreen from '../screens/CalendarScreen';
 import TransactionsScreen from '../screens/TransactionsScreen';
 import TransactionFormScreen from '../screens/TransactionFormScreen';
 import MoreStack from './MoreStack';
+import BucketsScreen from '../screens/BucketsScreen';
 
 // Simple icon components using basic shapes
 function TabIcon({ name, color, size }: { name: string; color: string; size: number }) {
@@ -87,6 +88,7 @@ function TransactionsStackScreen() {
     >
       <TransactionsStack.Screen name="TransactionsList" component={TransactionsScreen} options={{ title: 'Transactions' }} />
       <TransactionsStack.Screen name="TransactionForm" component={TransactionFormScreen} options={({ route }: any) => ({ title: route.params?.transaction ? 'Edit Transaction' : 'New Transaction' })} />
+      <TransactionsStack.Screen name="TransactionBuckets" component={BucketsScreen} options={{ title: 'Create a bucket' }} />
     </TransactionsStack.Navigator>
   );
 }
@@ -108,6 +110,7 @@ function CalendarStackScreen() {
     >
       <CalendarStack.Screen name="CalendarView" component={CalendarScreen} options={{ title: 'Calendar' }} />
       <CalendarStack.Screen name="TransactionForm" component={TransactionFormScreen} options={({ route }: any) => ({ title: route.params?.transaction ? 'Edit Transaction' : 'New Transaction' })} />
+      <CalendarStack.Screen name="TransactionBuckets" component={BucketsScreen} options={{ title: 'Create a bucket' }} />
     </CalendarStack.Navigator>
   );
 }

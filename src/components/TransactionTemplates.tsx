@@ -1,3 +1,4 @@
+import { parseMoneyInput, getMoneyInputError } from '../utils/money';
 import { useState, useEffect } from 'react';
 import { TransactionTemplate, Bucket } from '../types';
 import { saveToLocalStorage, loadFromLocalStorage, generateId } from '../utils/storage';
@@ -24,6 +25,9 @@ export default function TransactionTemplates({ buckets, onUseTemplate }: Transac
     notes: '',
   });
   const [tagInput, setTagInput] = useState('');
+  const [amountInput, setAmountInput] = useState('');
+  const [amountTouched, setAmountTouched] = useState(false);
+  const amountError = getMoneyInputError(amountInput, amountTouched, true);
 
   useEffect(() => {
     const saved = loadFromLocalStorage<TransactionTemplate[]>(STORAGE_KEY, []);
@@ -37,11 +41,15 @@ export default function TransactionTemplates({ buckets, onUseTemplate }: Transac
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setAmountTouched(true);
     if (!formData.name || !formData.description) return;
 
+    const parsedAmount = amountInput.trim() === '' ? undefined : parseMoneyInput(amountInput);
+    if (parsedAmount === null) return;
     const template: TransactionTemplate = {
       id: editingTemplate?.id || generateId(),
       ...formData,
+      amount: parsedAmount,
       bucketId: formData.type === 'expense' && formData.bucketId ? formData.bucketId : undefined,
     };
 
@@ -63,6 +71,8 @@ export default function TransactionTemplates({ buckets, onUseTemplate }: Transac
     setTagInput('');
     setShowForm(false);
     setEditingTemplate(null);
+    setAmountInput('');
+    setAmountTouched(false);
   };
 
   const handleDelete = (id: string) => {
@@ -73,6 +83,8 @@ export default function TransactionTemplates({ buckets, onUseTemplate }: Transac
 
   const handleEdit = (template: TransactionTemplate) => {
     setEditingTemplate(template);
+    setAmountInput(template.amount?.toString() ?? '');
+    setAmountTouched(false);
     setFormData({
       name: template.name,
       type: template.type,
@@ -104,6 +116,8 @@ export default function TransactionTemplates({ buckets, onUseTemplate }: Transac
             setShowForm(!showForm);
             if (showForm) {
               setEditingTemplate(null);
+              setAmountInput('');
+              setAmountTouched(false);
               setFormData({
                 name: '',
                 type: 'expense',
@@ -188,12 +202,17 @@ export default function TransactionTemplates({ buckets, onUseTemplate }: Transac
           <div className="form-group">
             <label>Amount (optional)</label>
             <input
-              type="number"
-              step="0.01"
-              value={formData.amount || ''}
-              onChange={(e) => setFormData({ ...formData, amount: e.target.value ? parseFloat(e.target.value) : undefined })}
+              type="text" inputMode="decimal"
+              value={amountInput}
+              onChange={(e) => setAmountInput(e.target.value)}
+              onBlur={() => setAmountTouched(true)}
+              onInvalid={(e) => { e.preventDefault(); setAmountTouched(true); }}
+              aria-invalid={Boolean(amountError)}
+              aria-describedby={amountError ? 'template-amount-error' : undefined}
+              style={amountError ? { borderColor: 'var(--danger-color)' } : undefined}
               className="input"
             />
+            {amountError && <p id="template-amount-error" aria-live="polite" style={{ color: 'var(--danger-color)', fontSize: '12px', marginTop: '6px' }}>{amountError}</p>}
           </div>
 
           {formData.type === 'expense' && (
@@ -263,6 +282,8 @@ export default function TransactionTemplates({ buckets, onUseTemplate }: Transac
               onClick={() => {
                 setShowForm(false);
                 setEditingTemplate(null);
+                setAmountInput('');
+              setAmountTouched(false);
               }}
               className="btn btn-secondary"
             >

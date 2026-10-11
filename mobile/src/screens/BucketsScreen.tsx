@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity, TextInput,
   Modal, Alert, KeyboardAvoidingView, Platform,
@@ -14,13 +14,16 @@ const COLORS = [
   '#f97316', '#ef4444', '#ec4899', '#a855f7', '#64748b',
 ];
 
-export default function BucketsScreen() {
+export default function BucketsScreen({ navigation, route }: any) {
+  const returnToTransaction = route.params?.returnToTransaction === true;
   const { theme } = useTheme();
   const { state, addBucket, updateBucket, deleteBucket } = useAppState();
-  const [modalVisible, setModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(returnToTransaction);
   const [editingBucket, setEditingBucket] = useState<Bucket | null>(null);
   const [name, setName] = useState('');
   const [color, setColor] = useState(COLORS[0]);
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
 
   const openAdd = () => {
     setEditingBucket(null);
@@ -37,10 +40,13 @@ export default function BucketsScreen() {
   };
 
   const handleSave = async () => {
+    if (savingRef.current) return;
     if (!name.trim()) {
       Alert.alert('Error', 'Please enter a name');
       return;
     }
+    savingRef.current = true;
+    setSaving(true);
     try {
       if (editingBucket) {
         await updateBucket(editingBucket.id, { name: name.trim(), color });
@@ -48,8 +54,12 @@ export default function BucketsScreen() {
         await addBucket({ id: generateId(), name: name.trim(), color });
       }
       setModalVisible(false);
+      if (returnToTransaction && !editingBucket && navigation.isFocused()) navigation.goBack();
     } catch (err: any) {
       Alert.alert('Error', err.message);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
@@ -92,7 +102,7 @@ export default function BucketsScreen() {
         }
       />
 
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => { if (!savingRef.current) setModalVisible(false); }}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{editingBucket ? 'Edit Bucket' : 'New Bucket'}</Text>
@@ -123,11 +133,11 @@ export default function BucketsScreen() {
             </View>
 
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => { hapticSelection(); setModalVisible(false); }}>
+              <TouchableOpacity disabled={saving} style={styles.cancelBtn} onPress={() => { hapticSelection(); setModalVisible(false); }}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={() => { hapticSelection(); handleSave(); }}>
-                <Text style={styles.saveBtnText}>Save</Text>
+              <TouchableOpacity disabled={saving} accessibilityState={{ disabled: saving, busy: saving }} style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={() => { hapticSelection(); handleSave(); }}>
+                <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save'}</Text>
               </TouchableOpacity>
             </View>
           </View>

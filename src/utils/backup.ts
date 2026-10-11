@@ -6,45 +6,25 @@ export interface BackupData {
   data: AppState;
 }
 
-export const BACKUP_VERSION = '1.0.0';
-
-export function exportToJSON(state: AppState): string {
-  const backup: BackupData = {
-    version: BACKUP_VERSION,
-    exportDate: new Date().toISOString(),
-    data: state,
-  };
-  return JSON.stringify(backup, null, 2);
-}
+export const BACKUP_VERSION = '2.0.0';
 
 export function importFromJSON(jsonString: string): BackupData {
-  try {
-    const backup: BackupData = JSON.parse(jsonString);
-    
-    // Validate structure
-    if (!backup.data || !backup.version) {
-      throw new Error('Invalid backup format');
-    }
-    
-    // Validate data structure
-    if (!Array.isArray(backup.data.buckets) ||
-        !Array.isArray(backup.data.transactions) ||
-        !Array.isArray(backup.data.recurringTransactions) ||
-        !Array.isArray(backup.data.budgets)) {
-      throw new Error('Invalid backup data structure');
-    }
-    
-    return backup;
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      throw new Error('Invalid JSON format');
-    }
-    throw error;
+  let backup: BackupData;
+  try { backup = JSON.parse(jsonString); } catch { throw new Error('Invalid JSON format'); }
+  if (!backup || !['1.0.0', BACKUP_VERSION].includes(backup.version) || !backup.data ||
+      !['buckets', 'transactions', 'recurringTransactions', 'budgets'].every(key =>
+        Array.isArray((backup.data as unknown as Record<string, unknown>)[key]))) {
+    throw new Error('Invalid or unsupported backup file');
   }
+  if (backup.version === BACKUP_VERSION &&
+      (!Array.isArray(backup.data.monthlySummaries) || !Array.isArray(backup.data.yearlySummaries))) {
+    throw new Error('Backup is missing summaries');
+  }
+  return backup;
 }
 
-export function downloadBackup(state: AppState, filename?: string): void {
-  const json = exportToJSON(state);
+export function downloadBackup(backup: BackupData, filename?: string): void {
+  const json = JSON.stringify(backup, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');

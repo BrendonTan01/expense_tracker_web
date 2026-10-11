@@ -55,6 +55,8 @@ export interface AppState {
   transactions: Transaction[];
   recurringTransactions: RecurringTransaction[];
   budgets: Budget[];
+  monthlySummaries?: MonthlySummary[];
+  yearlySummaries?: YearlySummary[];
 }
 
 // Transaction Template

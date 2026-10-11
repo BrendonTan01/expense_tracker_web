@@ -1,3 +1,4 @@
+import { parseMoneyInput, getMoneyInputError } from '../utils/money';
 import { useState, useEffect } from 'react';
 import { Transaction, Bucket } from '../types';
 import { checkForDuplicates } from '../utils/duplicateDetection';
@@ -21,6 +22,8 @@ export default function TransactionForm({
     (initialTransaction?.type as 'expense' | 'income' | 'investment') || 'expense'
   );
   const [amount, setAmount] = useState(initialTransaction?.amount?.toString() || '');
+  const [amountTouched, setAmountTouched] = useState(false);
+  const amountError = getMoneyInputError(amount, amountTouched);
   const [description, setDescription] = useState(initialTransaction?.description || '');
   const [bucketId, setBucketId] = useState(initialTransaction?.bucketId || '');
   const [date, setDate] = useState(
@@ -50,6 +53,7 @@ export default function TransactionForm({
     if (initialTransaction) {
       setType((initialTransaction.type as 'expense' | 'income' | 'investment') || 'expense');
       setAmount(initialTransaction.amount?.toString() || '');
+      setAmountTouched(false);
       setDescription(initialTransaction.description || '');
       setBucketId(initialTransaction.bucketId || '');
       setDate(
@@ -63,6 +67,7 @@ export default function TransactionForm({
       // Reset form when not editing
       setType('expense');
       setAmount('');
+      setAmountTouched(false);
       setDescription('');
       setBucketId('');
       setDate(new Date().toISOString().split('T')[0]);
@@ -79,8 +84,8 @@ export default function TransactionForm({
       return;
     }
 
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
+    const numAmount = parseMoneyInput(amount);
+    if (numAmount === null) {
       setDuplicateWarning(null);
       return;
     }
@@ -111,8 +116,9 @@ export default function TransactionForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) return;
+    const numAmount = parseMoneyInput(amount);
+    setAmountTouched(true);
+    if (numAmount === null) return;
     if (type === 'expense' && !bucketId) return;
 
     // Warn if duplicate but allow submission
@@ -140,6 +146,7 @@ export default function TransactionForm({
     // Reset form if not editing
     if (!initialTransaction) {
       setAmount('');
+      setAmountTouched(false);
       setDescription('');
       setBucketId('');
       setDate(new Date().toISOString().split('T')[0]);
@@ -222,14 +229,18 @@ export default function TransactionForm({
       <div className="form-group">
         <label>Amount</label>
         <input
-          type="number"
-          step="0.01"
-          min="0.01"
+          type="text" inputMode="decimal"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
+          onBlur={() => setAmountTouched(true)}
+          onInvalid={(e) => { e.preventDefault(); setAmountTouched(true); }}
+          aria-invalid={Boolean(amountError)}
+          aria-describedby={amountError ? 'transaction-amount-error' : undefined}
+          style={amountError ? { borderColor: 'var(--danger-color)' } : undefined}
           className="input"
           required
         />
+        {amountError && <p id="transaction-amount-error" aria-live="polite" style={{ color: 'var(--danger-color)', fontSize: '12px', marginTop: '6px' }}>{amountError}</p>}
       </div>
 
       <div className="form-group">

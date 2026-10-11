@@ -1,3 +1,5 @@
+import { restoreReceiptKey } from './restoreReceipt';
+import { generateId } from './storage';
 import { AppState, Bucket, Transaction, RecurringTransaction, Budget, MonthlySummary, YearlySummary } from '../types';
 
 // Use relative URLs for API calls (works with Vercel serverless functions)
@@ -24,13 +26,14 @@ function getAuthHeaders(additionalHeaders: Record<string, string> = {}): Record<
 }
 
 // Helper function to create a fetch with timeout
-function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000): Promise<Response> {
-  return Promise.race([
-    fetch(url, options),
-    new Promise<Response>((_, reject) =>
-      setTimeout(() => reject(new Error('Request timeout')), timeout)
-    ),
-  ]);
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Helper function to handle API responses
@@ -228,6 +231,21 @@ const isValidRecurringTransaction = (r: RecurringTransaction | null): r is Recur
 };
 
 export const recurringApi = {
+  process: async (today: string): Promise<{ created: number; available?: boolean }> => {
+    // Old servers ignore action and return their recurring list. Probe with a GET
+    // before sending a new POST operation that an old server would misinterpret.
+    const capabilitiesResponse = await fetchWithTimeout(`${API_BASE_URL}/recurring?action=capabilities`, {
+      headers: getAuthHeaders(),
+    });
+    const capabilities = await handleResponse<{ recurringProcessing?: boolean } | unknown[]>(capabilitiesResponse);
+    if (!capabilities || Array.isArray(capabilities) || capabilities.recurringProcessing !== true) {
+      return { created: 0, available: false };
+    }
+    const response = await fetchWithTimeout(`${API_BASE_URL}/recurring?action=process`, {
+      method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ today }),
+    }, 30000);
+    return handleResponse(response);
+  },
   getAll: async (): Promise<RecurringTransaction[]> => {
     const response = await fetchWithTimeout(`${API_BASE_URL}/recurring`, {
       headers: getAuthHeaders(),
@@ -524,5 +542,27 @@ export const appStateApi = {
       recurringTransactions: recurring,
       budgets,
     };
+  },
+};
+
+export const backupApi = {
+  export: async (): Promise<import('./backup').BackupData> => {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/recurring?action=backup`, { headers: getAuthHeaders() }, 30000);
+    return handleResponse(response);
+  },
+  restore: async (backup: import('./backup').BackupData, userId: string): Promise<void> => {
+    if (!userId) throw new Error('Sign in before restoring a backup.');
+    const receiptKey = restoreReceiptKey(userId, backup);
+    let requestId = localStorage.getItem(receiptKey);
+    if (!requestId) {
+      requestId = generateId();
+      localStorage.setItem(receiptKey, requestId);
+    }
+    const response = await fetchWithTimeout(`${API_BASE_URL}/recurring?action=backup`, {
+      method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ ...backup, requestId, expectedUserId: userId }),
+    }, 30000);
+    await handleResponse(response);
+    // Keep the same request ID after a timeout, including after an app restart.
+    localStorage.removeItem(receiptKey);
   },
 };

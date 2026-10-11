@@ -1,12 +1,12 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { restoreReceiptKey } from './restoreReceipt';
+import { generateId } from './storage';
 import * as SecureStore from 'expo-secure-store';
 import { AppState, Bucket, Transaction, RecurringTransaction, Budget, MonthlySummary, YearlySummary } from '../types';
 
-// IMPORTANT: Update this to your actual API base URL
-// For local dev: 'http://YOUR_LOCAL_IP:3001/api'
-// For production: 'https://your-vercel-app.vercel.app/api'
-const API_BASE_URL = 'https://expense-tracker-web-wheat.vercel.app/api';
+import { API_BASE_URL, ENV_STORAGE_PREFIX, IS_STAGING, STAGING_PROJECT_REF } from './environment';
 
-const TOKEN_KEY = 'auth_token';
+const TOKEN_KEY = `${ENV_STORAGE_PREFIX}auth_token`;
 
 let _cachedToken: string | null = null;
 
@@ -31,8 +31,8 @@ export async function clearAuthToken(): Promise<void> {
 }
 
 // Saved credentials for "Remember Me" feature
-const SAVED_EMAIL_KEY = 'saved_email';
-const SAVED_PASSWORD_KEY = 'saved_password';
+const SAVED_EMAIL_KEY = `${ENV_STORAGE_PREFIX}saved_email`;
+const SAVED_PASSWORD_KEY = `${ENV_STORAGE_PREFIX}saved_password`;
 
 export async function saveCredentials(email: string, password: string): Promise<void> {
   await SecureStore.setItemAsync(SAVED_EMAIL_KEY, email);
@@ -71,13 +71,37 @@ async function getAuthHeaders(additionalHeaders: Record<string, string> = {}): P
   return headers;
 }
 
-function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000): Promise<Response> {
-  return Promise.race([
-    fetch(url, options),
-    new Promise<Response>((_, reject) =>
-      setTimeout(() => reject(new Error('Request timeout')), timeout)
-    ),
-  ]);
+let stagingCheck: Promise<void> | null = null;
+async function verifyStagingEndpoint(): Promise<void> {
+  if (!IS_STAGING) return;
+  if (!stagingCheck) {
+    stagingCheck = (async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      try {
+        const response = await fetch(`${API_BASE_URL}/health`, { signal: controller.signal });
+        const health = await response.json();
+        if (!response.ok || health.environment !== 'staging' || health.projectRef !== STAGING_PROJECT_REF) {
+          throw new Error('The API is not connected to the expected test database');
+        }
+      } finally { clearTimeout(timer); }
+    })().catch(() => {
+      stagingCheck = null;
+      throw new Error('Test API unavailable. Start the staging API on your Mac and use the same Wi-Fi.');
+    });
+  }
+  await stagingCheck;
+}
+
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000): Promise<Response> {
+  await verifyStagingEndpoint();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 let _onUnauthorized: (() => void) | null = null;
@@ -263,6 +287,21 @@ export const transactionsApi = {
 const isValidRecurringTransaction = (r: RecurringTransaction | null): r is RecurringTransaction => r !== null;
 
 export const recurringApi = {
+  process: async (today: string): Promise<{ created: number; available?: boolean }> => {
+    // Old servers ignore action and return their recurring list. Probe with a GET
+    // before sending a new POST operation that an old server would misinterpret.
+    const capabilitiesResponse = await fetchWithTimeout(`${API_BASE_URL}/recurring?action=capabilities`, {
+      headers: await getAuthHeaders(),
+    });
+    const capabilities = await handleResponse<{ recurringProcessing?: boolean } | unknown[]>(capabilitiesResponse);
+    if (!capabilities || Array.isArray(capabilities) || capabilities.recurringProcessing !== true) {
+      return { created: 0, available: false };
+    }
+    const response = await fetchWithTimeout(`${API_BASE_URL}/recurring?action=process`, {
+      method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ today }),
+    }, 30000);
+    return handleResponse(response);
+  },
   getAll: async (): Promise<RecurringTransaction[]> => {
     const headers = await getAuthHeaders();
     const response = await fetchWithTimeout(`${API_BASE_URL}/recurring`, { headers }).catch((err) => {
@@ -449,5 +488,27 @@ export const appStateApi = {
       budgetsApi.getAll(),
     ]);
     return { buckets, transactions, recurringTransactions: recurring, budgets };
+  },
+};
+
+export const backupApi = {
+  export: async (): Promise<import('./backup').BackupData> => {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/recurring?action=backup`, { headers: await getAuthHeaders() }, 30000);
+    return handleResponse(response);
+  },
+  restore: async (backup: import('./backup').BackupData, userId: string): Promise<void> => {
+    if (!userId) throw new Error('Sign in before restoring a backup.');
+    const receiptKey = ENV_STORAGE_PREFIX + restoreReceiptKey(userId, backup);
+    let requestId = await AsyncStorage.getItem(receiptKey);
+    if (!requestId) {
+      requestId = generateId();
+      await AsyncStorage.setItem(receiptKey, requestId);
+    }
+    const response = await fetchWithTimeout(`${API_BASE_URL}/recurring?action=backup`, {
+      method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ ...backup, requestId, expectedUserId: userId }),
+    }, 30000);
+    await handleResponse(response);
+    // Keep the same request ID after a timeout, including after an app restart.
+    await AsyncStorage.removeItem(receiptKey);
   },
 };

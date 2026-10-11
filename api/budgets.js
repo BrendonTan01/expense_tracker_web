@@ -1,3 +1,4 @@
+import { isValidAmount, MONEY_ERROR, checkOwnedReferences } from '../lib/validation.js';
 import { getAuthenticatedClient } from '../lib/supabase.js';
 
 export default async function handler(req, res) {
@@ -45,6 +46,10 @@ export default async function handler(req, res) {
         if (!bucketId || amount === undefined || !period || !year) {
           return res.status(400).json({ error: 'bucketId, amount, period, and year are required' });
         }
+
+        if (!isValidAmount(amount)) return res.status(400).json({ error: MONEY_ERROR });
+        const referenceError = await checkOwnedReferences(supabase, user.id, { bucketId });
+        if (referenceError) return res.status(400).json({ error: referenceError });
 
         if (period !== 'monthly' && period !== 'yearly') {
           return res.status(400).json({ error: 'period must be either "monthly" or "yearly"' });
@@ -131,7 +136,11 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'id, bucketId, amount, period, and year are required' });
       }
 
-      if (period !== 'monthly' && period !== 'yearly') {
+      if (!isValidAmount(amount)) return res.status(400).json({ error: MONEY_ERROR });
+        const referenceError = await checkOwnedReferences(supabase, user.id, { bucketId });
+        if (referenceError) return res.status(400).json({ error: referenceError });
+
+        if (period !== 'monthly' && period !== 'yearly') {
         return res.status(400).json({ error: 'period must be either "monthly" or "yearly"' });
       }
 

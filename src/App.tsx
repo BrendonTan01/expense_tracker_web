@@ -1,9 +1,10 @@
+import { BackupData } from './utils/backup';
 import { useState, useEffect, useRef, Component, ReactNode, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppState, Transaction, Bucket, RecurringTransaction, Budget, TransactionTemplate } from './types';
 import { generateId } from './utils/storage';
-import { appStateApi, bucketsApi, transactionsApi, recurringApi, budgetsApi } from './utils/api';
-import { shouldGenerateTransaction, getOccurrenceDatesUpTo, getNextOccurrence } from './utils/dateHelpers';
+import { backupApi, appStateApi, bucketsApi, transactionsApi, recurringApi, budgetsApi } from './utils/api';
+import { getNextOccurrence } from './utils/dateHelpers';
 import { useAuth } from './contexts/AuthContext';
 import BucketManager from './components/BucketManager';
 import TransactionForm from './components/TransactionForm';
@@ -75,6 +76,8 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionStatus, setActionStatus] = useState<{ phase: 'pending' | 'success'; message: string } | null>(null);
+  const userIdRef = useRef(user?.id);
+  userIdRef.current = user?.id;
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -116,129 +119,25 @@ function App() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
 
-  // Generate transactions from recurring transactions (after load, and when user returns to tab)
+  // The server commits occurrences and schedule progress together. No client fallback.
   useEffect(() => {
-    if (loading) return;
-
-    const generateRecurringTransactions = async () => {
-      const currentState = stateRef.current;
-      const newTransactions: Transaction[] = [];
-      const updatedRecurring: RecurringTransaction[] = [];
-      const today = new Date().toISOString().split('T')[0];
-      const normalizeIsoDate = (value: string | undefined): string | undefined => {
-        if (!value) return undefined;
-        const d = String(value).split('T')[0];
-        return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined;
-      };
-      const maxIsoDate = (...values: Array<string | undefined>): string | undefined => {
-        let max: string | undefined;
-        for (const v of values) {
-          if (!v) continue;
-          if (!max || v > max) max = v;
-        }
-        return max;
-      };
-
-      for (const recurring of currentState.recurringTransactions) {
-        const existingDatesArr = currentState.transactions
-          .filter((t) => t.recurringId === recurring.id)
-          .map((t) => normalizeIsoDate(t.date))
-          .filter((d): d is string => Boolean(d));
-
-        const existingUpToTodaySorted = existingDatesArr
-          .filter((d) => d <= today)
-          .sort();
-        const latestExistingUpToToday =
-          existingUpToTodaySorted.length > 0
-            ? existingUpToTodaySorted[existingUpToTodaySorted.length - 1]
-            : undefined;
-
-        const effectiveLastApplied = maxIsoDate(
-          normalizeIsoDate(recurring.lastApplied),
-          latestExistingUpToToday
-        );
-
-        const shouldGenerate = shouldGenerateTransaction(
-          recurring.frequency,
-          recurring.startDate,
-          recurring.endDate,
-          effectiveLastApplied
-        );
-
-        let latestGenerated: string | undefined = effectiveLastApplied;
-        if (shouldGenerate) {
-          const occurrenceDates = getOccurrenceDatesUpTo(
-            recurring.frequency,
-            recurring.startDate,
-            recurring.endDate,
-            effectiveLastApplied,
-            today
-          );
-
-          const existingDates = new Set(existingDatesArr);
-
-          for (const date of occurrenceDates) {
-            if (existingDates.has(date)) continue;
-            newTransactions.push({
-              id: generateId(),
-              ...recurring.transaction,
-              date,
-              isRecurring: true,
-              recurringId: recurring.id,
-            });
-            latestGenerated = date;
-          }
-        }
-
-        updatedRecurring.push({
-          ...recurring,
-          // Keep schedule progress aligned even if some occurrences already exist
-          // (e.g. imported/manual entries) so "Next" advances correctly.
-          lastApplied: latestGenerated ?? recurring.lastApplied,
-        });
-      }
-
-      if (newTransactions.length > 0) {
-        try {
-          const savedTransactions = await Promise.all(
-            newTransactions.map((t) => transactionsApi.create(t))
-          );
-          setState((prev) => ({
-            ...prev,
-            transactions: [...prev.transactions, ...savedTransactions],
-          }));
-        } catch (err) {
-          console.error('Failed to save generated transactions:', err);
-        }
-      }
-
-      const needsUpdate = updatedRecurring.some((r) => {
-        const orig = currentState.recurringTransactions.find((o) => o.id === r.id);
-        return orig && orig.lastApplied !== r.lastApplied;
-      });
-      if (needsUpdate) {
-        try {
-          await Promise.all(
-            updatedRecurring.map(async (r) => {
-              const original = currentState.recurringTransactions.find((o) => o.id === r.id);
-              if (original && original.lastApplied !== r.lastApplied) {
-                await recurringApi.update(r.id, { lastApplied: r.lastApplied });
-              }
-            })
-          );
-          setState((prev) => ({
-            ...prev,
-            recurringTransactions: updatedRecurring,
-          }));
-        } catch (err) {
-          console.error('Failed to update recurring transactions:', err);
-        }
+    if (loading || !user || !stateRef.current.recurringTransactions.length) return;
+    let cancelled = false;
+    const process = async () => {
+      try {
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const result = await recurringApi.process(today);
+        if (result.available === false) return;
+        const data = await appStateApi.load();
+        if (!cancelled) setState(data);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Recurring entries could not be processed. Please retry later.');
       }
     };
-
-    generateRecurringTransactions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, visibilityTrigger]);
+    void process();
+    return () => { cancelled = true; };
+  }, [loading, visibilityTrigger, user]);
 
   const handleAddBucket = async (bucket: Bucket) => {
     try {
@@ -411,42 +310,18 @@ function App() {
     });
   };
 
-  const handleImportData = async (importedData: AppState) => {
+  const handleImportData = async (backup: BackupData) => {
+    if (!user) throw new Error('Sign in before restoring a backup.');
+    await backupApi.restore(backup, user.id);
+    // Do not generate new occurrences during restore; show the restored snapshot.
     try {
-      // Import buckets
-      const importedBuckets = await Promise.all(
-        importedData.buckets.map(b => bucketsApi.create(b))
-      );
-
-      // Import transactions
-      const importedTransactions = await Promise.all(
-        importedData.transactions.map(t => transactionsApi.create({
-          ...t,
-          id: generateId(),
-        }))
-      );
-
-      // Import recurring transactions
-      const importedRecurring = await Promise.all(
-        importedData.recurringTransactions.map(r => recurringApi.create(r))
-      );
-
-      // Import budgets
-      const importedBudgets = await Promise.all(
-        importedData.budgets.map(b => budgetsApi.create(b))
-      );
-
-      setState({
-        buckets: importedBuckets,
-        transactions: importedTransactions,
-        recurringTransactions: importedRecurring,
-        budgets: importedBudgets,
-      });
-
+      const restored = await appStateApi.load();
+      if (userIdRef.current !== user.id) return;
+      setState(restored);
       setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to import data');
-      console.error('Failed to import data:', err);
+    } catch {
+      if (userIdRef.current !== user.id) return;
+      setError('Backup restored, but the refreshed data could not be loaded. Reload the app.');
     }
   };
 

@@ -1,3 +1,4 @@
+import { isDate, isValidAmount, MONEY_ERROR, checkOwnedReferences } from '../../lib/validation.js';
 import { getAuthenticatedClient } from '../../lib/supabase.js';
 
 export default async function handler(req, res) {
@@ -60,6 +61,7 @@ export default async function handler(req, res) {
       const body = req.body || {};
       const { transaction, frequency, startDate, endDate, lastApplied } = body;
 
+      if ((startDate !== undefined && !isDate(startDate)) || (endDate && !isDate(endDate)) || (lastApplied && !isDate(lastApplied))) return res.status(400).json({ error: 'Invalid recurring dates' });
       const updateData = {};
 
       if (transaction !== undefined) {
@@ -69,6 +71,9 @@ export default async function handler(req, res) {
         if (!['expense', 'income', 'investment'].includes(transaction.type)) {
           return res.status(400).json({ error: 'transaction.type must be either "expense", "income", or "investment"' });
         }
+        if (!isValidAmount(transaction.amount)) return res.status(400).json({ error: MONEY_ERROR });
+        const referenceError = await checkOwnedReferences(supabase, user.id, transaction);
+        if (referenceError) return res.status(400).json({ error: referenceError });
         updateData.type = transaction.type;
         updateData.amount = transaction.amount;
         updateData.description = transaction.description;
