@@ -10,6 +10,16 @@
 - Brendon wants to focus on development and staging for now. Commit checkpoints when requested; do not update the live backend or Play Store app without explicit release authorization.
 - Check current package files and source rather than assuming recorded version numbers are still current.
 
+## Roadmap source of truth
+
+- The [Expense Tracker Diagnostic and Development Roadmap](https://chatgpt.com/space/page_c1b355e4a6c88191870655c598ec957a) is the canonical working record for priorities, scope, decisions, acceptance criteria and progress. Page ID: `page_c1b355e4a6c88191870655c598ec957a`.
+- Read the current roadmap before planning, selecting the next task, implementing changes or reviewing work. Do not rely only on chat history or a cached copy. Give delegated agents the relevant current items and acceptance criteria.
+- Keep the roadmap updated as work progresses: record started work, scope changes, new findings, implementation status, exact verification results, unresolved issues and next steps. Before finishing a work session, reconcile its affected items. After an authorized commit, push or deployment, update the corresponding references and rollout status.
+- Use existing item IDs where applicable; add new work with a clear priority and acceptance criteria rather than maintaining a competing backlog in README or chat. README holds setup instructions and detailed evidence linked from the roadmap.
+- Distinguish implemented locally, automated checks passed, phone/hosted checks pending, committed, pushed and deployed. Only mark an item complete when its required acceptance checks pass; never infer a release from a commit or push.
+- Whenever a change needs manual verification, automatically provide a numbered, user-ready checklist in the handoff and link it from the roadmap. Include the exact environment/startup steps, test data, taps/actions, expected results, cleanup and how to report failures. Separate checks Brendon can perform from fault injection, backend/security checks and automation owned by the agent. Never ask only to "test it" or require Brendon to request the steps. Record user-reported results without assuming they cover untested paths.
+- Current user instructions take precedence. Verify actual code and environment state, then reconcile discrepancies into the roadmap rather than treating historical prose as proof. If the Page is inaccessible, state that limitation, continue authorized work using available evidence, and record a pending roadmap update without claiming it was synchronized.
+
 ## UI references — Brendon's preference
 
 Whenever building or redesigning a UI, consult both Godly (https://godly.website/; gallery also https://godly.design/) and Watermelon UI (https://ui.watermelon.sh/) first. Select references relevant to the audience and task, and briefly explain the useful ideas. Adapt to the existing design and stack; do not install a library or copy an entire design just to follow a reference. If a resource is inaccessible, state the limitation and continue with available references.
@@ -51,7 +61,7 @@ Choose checks that match the change; do not rerun unrelated checks or add tests 
 
 ## Current known follow-up work
 
-These are starting points to verify, not proof of current behavior:
+Consult the canonical roadmap above for current priorities and completion status. These historical notes are starting points to verify, not a separate backlog or proof of current behavior:
 - Reliability migration and hosted concurrency checks passed on isolated `expense-tracker-staging` (`tfjegsgjwyzcixlueosi`); see README evidence. `mobile/npm run start:staging` connects Expo to the isolated local API with separate login storage. Brendon confirmed the requested phone checks passed, including JSON restore after the file-picker fix. Production rollout remains deferred. Do not assume the production database has these guards.
 - New restore is transactional and exports six account tables; see README rollout notes. Older installed clients still have the unsafe multi-request restore; device-local templates/preferences are excluded.
 - Session refresh, account-scoped local storage, currency/date consistency, and account recovery/deletion need review.

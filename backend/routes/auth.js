@@ -3,14 +3,14 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { getDatabase } from '../database.js';
 import { generateId } from '../utils.js';
+import { JWT_SECRET } from '../auth-config.js';
 
 const router = express.Router();
 const db = getDatabase();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 // Helper function to generate JWT token
 function generateToken(userId) {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d', algorithm: 'HS256' });
 }
 
 // POST /api/auth/register
@@ -111,7 +111,7 @@ router.get('/verify', (req, res) => {
     const token = authHeader.substring(7);
     
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
       const user = db.prepare('SELECT id, email, created_at FROM users WHERE id = ?').get(decoded.userId);
       
       if (!user) {

@@ -4,12 +4,12 @@ import {
 } from 'react-native';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import { TransactionTemplate, Bucket } from '../types';
 import { loadFromStorage } from '../utils/storage';
 import { hapticSelection } from '../utils/haptics';
 import { formatCurrency } from '../utils/dateHelpers';
-
-const STORAGE_KEY = 'transaction_templates';
+import { templateStorageKey } from '../utils/templateStorage';
 
 interface TransactionTemplatesSectionProps {
   buckets: Bucket[];
@@ -17,16 +17,26 @@ interface TransactionTemplatesSectionProps {
 }
 
 export default function TransactionTemplatesSection({ buckets, onUseTemplate }: TransactionTemplatesSectionProps) {
+  const { user } = useAuth();
+  return user ? <AccountTemplatesSection key={user.id} userId={user.id} buckets={buckets} onUseTemplate={onUseTemplate} /> : null;
+}
+
+function AccountTemplatesSection({ userId, buckets, onUseTemplate }: TransactionTemplatesSectionProps & { userId: string }) {
   const { theme } = useTheme();
   const navigation = useNavigation<any>();
   const isFocused = useIsFocused();
   const [templates, setTemplates] = useState<TransactionTemplate[]>([]);
 
   useEffect(() => {
+    let cancelled = false;
+    setTemplates([]);
     if (isFocused) {
-      loadFromStorage<TransactionTemplate[]>(STORAGE_KEY, []).then(setTemplates);
+      loadFromStorage<TransactionTemplate[]>(templateStorageKey(userId), []).then(saved => {
+        if (!cancelled) setTemplates(Array.isArray(saved) ? saved : []);
+      });
     }
-  }, [isFocused]);
+    return () => { cancelled = true; };
+  }, [isFocused, userId]);
 
   const styles = createStyles(theme);
 
@@ -34,12 +44,12 @@ export default function TransactionTemplatesSection({ buckets, onUseTemplate }: 
     <View style={styles.container}>
       <View style={styles.labelRow}>
         <Text style={styles.label}>Quick add from template</Text>
-        <TouchableOpacity onPress={() => { hapticSelection(); navigation.navigate('MoreTab', { screen: 'Templates' }); }}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Manage transaction templates" onPress={() => { hapticSelection(); navigation.navigate('MoreTab', { screen: 'Templates', initial: false }); }}>
           <Text style={styles.manageLink}>Manage</Text>
         </TouchableOpacity>
       </View>
       {templates.length === 0 ? (
-        <TouchableOpacity style={styles.emptyChip} onPress={() => { hapticSelection(); navigation.navigate('MoreTab', { screen: 'Templates' }); }}>
+        <TouchableOpacity style={styles.emptyChip} onPress={() => { hapticSelection(); navigation.navigate('MoreTab', { screen: 'Templates', initial: false }); }}>
           <Text style={styles.emptyChipText}>+ Create your first template</Text>
         </TouchableOpacity>
       ) : (

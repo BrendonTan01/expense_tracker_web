@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 
 interface User {
   id: string;
@@ -22,19 +22,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const generation = useRef(0);
+
   // Load token from localStorage on mount
   useEffect(() => {
     const storedToken = localStorage.getItem('auth_token');
     if (storedToken) {
       setToken(storedToken);
       // Verify token and get user info
-      verifyToken(storedToken);
+      void verifyToken(storedToken, generation.current);
     } else {
       setLoading(false);
     }
   }, []);
 
-  const verifyToken = async (tokenToVerify: string) => {
+  const verifyToken = async (tokenToVerify: string, attempt: number) => {
     try {
       const response = await fetch('/api/auth/verify', {
         headers: {
@@ -42,8 +44,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
       });
 
+      if (attempt !== generation.current) return;
       if (response.ok) {
         const data = await response.json();
+        if (attempt !== generation.current) return;
         setUser(data.user);
       } else {
         // Token is invalid, clear it
@@ -52,16 +56,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
       }
     } catch (error) {
+      if (attempt !== generation.current) return;
       console.error('Token verification failed:', error);
       localStorage.removeItem('auth_token');
       setToken(null);
       setUser(null);
     } finally {
-      setLoading(false);
+      if (attempt === generation.current) setLoading(false);
     }
   };
 
   const login = async (email: string, password: string) => {
+    const attempt = ++generation.current;
     const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: {
@@ -88,12 +94,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const data = await response.json();
+    if (attempt !== generation.current) return;
+    localStorage.setItem('auth_token', data.token);
+    setLoading(false);
     setToken(data.token);
     setUser(data.user);
-    localStorage.setItem('auth_token', data.token);
   };
 
   const register = async (email: string, password: string) => {
+    const attempt = ++generation.current;
     const response = await fetch('/api/auth/register', {
       method: 'POST',
       headers: {
@@ -120,12 +129,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const data = await response.json();
+    if (attempt !== generation.current) return;
+    localStorage.setItem('auth_token', data.token);
+    setLoading(false);
     setToken(data.token);
     setUser(data.user);
-    localStorage.setItem('auth_token', data.token);
   };
 
   const logout = () => {
+    generation.current++;
+    setLoading(false);
     setToken(null);
     setUser(null);
     localStorage.removeItem('auth_token');

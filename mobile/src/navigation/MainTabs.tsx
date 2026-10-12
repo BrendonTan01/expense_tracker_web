@@ -11,6 +11,7 @@ import TransactionsScreen from '../screens/TransactionsScreen';
 import TransactionFormScreen from '../screens/TransactionFormScreen';
 import MoreStack from './MoreStack';
 import BucketsScreen from '../screens/BucketsScreen';
+import { transactionEntry } from './transactionEntry';
 
 // Simple icon components using basic shapes
 function TabIcon({ name, color, size }: { name: string; color: string; size: number }) {
@@ -87,7 +88,7 @@ function TransactionsStackScreen() {
       }}
     >
       <TransactionsStack.Screen name="TransactionsList" component={TransactionsScreen} options={{ title: 'Transactions' }} />
-      <TransactionsStack.Screen name="TransactionForm" component={TransactionFormScreen} options={({ route }: any) => ({ title: route.params?.transaction ? 'Edit Transaction' : 'New Transaction' })} />
+      <TransactionsStack.Screen name="TransactionForm" component={TransactionFormScreen} getId={({ params }: any) => params?.entryId} options={({ route }: any) => ({ title: route.params?.transaction ? 'Edit Transaction' : 'New Transaction' })} />
       <TransactionsStack.Screen name="TransactionBuckets" component={BucketsScreen} options={{ title: 'Create a bucket' }} />
     </TransactionsStack.Navigator>
   );
@@ -109,13 +110,13 @@ function CalendarStackScreen() {
       }}
     >
       <CalendarStack.Screen name="CalendarView" component={CalendarScreen} options={{ title: 'Calendar' }} />
-      <CalendarStack.Screen name="TransactionForm" component={TransactionFormScreen} options={({ route }: any) => ({ title: route.params?.transaction ? 'Edit Transaction' : 'New Transaction' })} />
+      <CalendarStack.Screen name="TransactionForm" component={TransactionFormScreen} getId={({ params }: any) => params?.entryId} options={({ route }: any) => ({ title: route.params?.transaction ? 'Edit Transaction' : 'New Transaction' })} />
       <CalendarStack.Screen name="TransactionBuckets" component={BucketsScreen} options={{ title: 'Create a bucket' }} />
     </CalendarStack.Navigator>
   );
 }
 
-// Placeholder for the Add tab (opens TransactionForm modally)
+// Placeholder for the Add action (opens a fresh transaction editor).
 function AddPlaceholder() {
   return <View />;
 }
@@ -124,10 +125,15 @@ export default function MainTabs() {
   const { theme } = useTheme();
   const { layout } = useLayout();
 
-  const visibleTabs = layout.tabs.filter(t => t.visible || t.id === 'more');
+  // Visibility controls tab buttons, never route registration. Add and templates
+  // still need TransactionsTab when its button is hidden.
+  const registeredTabs = layout.tabs;
+  const initialTab = registeredTabs.find(t => t.visible && t.id !== 'add')?.id || 'more';
+  const routeNames: Record<string, string> = { summary: 'SummaryTab', calendar: 'CalendarTab', transactions: 'TransactionsTab', more: 'MoreTab' };
 
   return (
     <Tab.Navigator
+      initialRouteName={routeNames[initialTab]}
       screenOptions={{
         tabBarStyle: {
           backgroundColor: theme.colors.tabBar,
@@ -142,7 +148,8 @@ export default function MainTabs() {
         headerShown: false,
       }}
     >
-      {visibleTabs.map(tab => {
+      {registeredTabs.map(tab => {
+        const tabBarItemStyle = !tab.visible && tab.id !== 'more' ? { display: 'none' as const } : undefined;
         switch (tab.id) {
           case 'summary':
               return (
@@ -152,6 +159,7 @@ export default function MainTabs() {
                 component={SummaryScreen}
                 listeners={{ tabPress: () => hapticLight() }}
                 options={{
+                  tabBarItemStyle,
                   tabBarLabel: 'Summary',
                   headerShown: true,
                   headerTitle: 'Dashboard',
@@ -171,6 +179,7 @@ export default function MainTabs() {
                 component={CalendarStackScreen}
                 listeners={{ tabPress: () => hapticLight() }}
                 options={{
+                  tabBarItemStyle,
                   tabBarLabel: 'Calendar',
                   tabBarIcon: ({ color, size }) => <TabIcon name="calendar" color={color} size={size} />,
                 }}
@@ -183,14 +192,16 @@ export default function MainTabs() {
                 name="AddTab"
                 component={AddPlaceholder}
                 options={{
-                  tabBarLabel: '',
+                  tabBarItemStyle,
+                  tabBarLabel: 'Add',
+                  tabBarAccessibilityLabel: 'Add transaction',
                   tabBarIcon: ({ size }) => <TabIcon name="add" color={theme.colors.primary} size={size} />,
                 }}
                 listeners={({ navigation }) => ({
                   tabPress: (e) => {
                     e.preventDefault();
                     hapticLight();
-                    navigation.navigate('TransactionsTab', { screen: 'TransactionForm' });
+                    navigation.navigate('TransactionsTab', { screen: 'TransactionForm', params: transactionEntry(), initial: false });
                   },
                 })}
               />
@@ -203,12 +214,14 @@ export default function MainTabs() {
                 component={TransactionsStackScreen}
                 listeners={({ navigation }) => ({
                   tabPress: (e) => {
+                    e.preventDefault();
                     hapticLight();
                     // Always show list view when Transactions tab is tapped (pop any stacked screens like TransactionForm)
-                    navigation.navigate('TransactionsTab', { screen: 'TransactionsList' });
+                    navigation.navigate('TransactionsTab', { screen: 'TransactionsList', pop: true });
                   },
                 })}
                 options={{
+                  tabBarItemStyle,
                   tabBarLabel: 'Transactions',
                   tabBarIcon: ({ color, size }) => <TabIcon name="transactions" color={color} size={size} />,
                 }}
@@ -220,8 +233,13 @@ export default function MainTabs() {
                 key="more"
                 name="MoreTab"
                 component={MoreStack}
-                listeners={{ tabPress: () => hapticLight() }}
+                listeners={({ navigation }) => ({ tabPress: (e) => {
+                  e.preventDefault();
+                  hapticLight();
+                  navigation.navigate('MoreTab', { screen: 'MoreHome', initial: false, pop: true });
+                } })}
                 options={{
+                  tabBarItemStyle,
                   tabBarLabel: 'More',
                   tabBarIcon: ({ color, size }) => <TabIcon name="more" color={color} size={size} />,
                 }}

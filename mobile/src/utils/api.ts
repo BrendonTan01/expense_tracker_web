@@ -9,58 +9,70 @@ import { API_BASE_URL, ENV_STORAGE_PREFIX, IS_STAGING, STAGING_PROJECT_REF } fro
 const TOKEN_KEY = `${ENV_STORAGE_PREFIX}auth_token`;
 
 let _cachedToken: string | null = null;
-
+let tokenLoaded = false;
+let tokenVersion = 0;
+let sessionGeneration = 0;
+export function getSessionGeneration(): number { return sessionGeneration; }
+export function invalidateAuthSession(): void { sessionGeneration++; }
+export function assertSessionGeneration(expected: number): void {
+  if (expected !== sessionGeneration) throw new Error('Account changed. Please try again.');
+}
+const headerSessions = new WeakMap<object, number>();
+let secureWrites: Promise<unknown> = Promise.resolve();
+function secureWrite(operation: () => Promise<void>): Promise<void> {
+  const result = secureWrites.then(operation);
+  secureWrites = result.catch(() => {});
+  return result;
+}
 export async function getAuthToken(): Promise<string | null> {
-  if (_cachedToken) return _cachedToken;
+  if (tokenLoaded) return _cachedToken;
+  const version = tokenVersion;
   try {
-    _cachedToken = await SecureStore.getItemAsync(TOKEN_KEY);
+    const stored = await SecureStore.getItemAsync(TOKEN_KEY);
+    if (version === tokenVersion) { _cachedToken = stored; tokenLoaded = true; }
     return _cachedToken;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
-
-export async function setAuthToken(token: string): Promise<void> {
-  _cachedToken = token;
-  await SecureStore.setItemAsync(TOKEN_KEY, token);
+export function setAuthToken(token: string): Promise<void> {
+  tokenVersion++; tokenLoaded = true; _cachedToken = token;
+  return secureWrite(() => SecureStore.setItemAsync(TOKEN_KEY, token));
 }
-
-export async function clearAuthToken(): Promise<void> {
-  _cachedToken = null;
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
+export function clearAuthToken(): Promise<void> {
+  tokenVersion++; tokenLoaded = true; _cachedToken = null;
+  return secureWrite(() => SecureStore.deleteItemAsync(TOKEN_KEY));
 }
-
-// Saved credentials for "Remember Me" feature
 const SAVED_EMAIL_KEY = `${ENV_STORAGE_PREFIX}saved_email`;
 const SAVED_PASSWORD_KEY = `${ENV_STORAGE_PREFIX}saved_password`;
-
-export async function saveCredentials(email: string, password: string): Promise<void> {
-  await SecureStore.setItemAsync(SAVED_EMAIL_KEY, email);
-  await SecureStore.setItemAsync(SAVED_PASSWORD_KEY, password);
+export function saveCredentials(email: string, password: string): Promise<void> {
+  return secureWrite(async () => {
+    await SecureStore.setItemAsync(SAVED_EMAIL_KEY, email);
+    await SecureStore.setItemAsync(SAVED_PASSWORD_KEY, password);
+  });
 }
-
 export async function getSavedCredentials(): Promise<{ email: string; password: string } | null> {
+  await secureWrites;
   try {
     const email = await SecureStore.getItemAsync(SAVED_EMAIL_KEY);
     const password = await SecureStore.getItemAsync(SAVED_PASSWORD_KEY);
-    if (email && password) return { email, password };
-    return null;
-  } catch {
-    return null;
-  }
+    return email && password ? { email, password } : null;
+  } catch { return null; }
 }
-
-export async function clearSavedCredentials(): Promise<void> {
-  try {
-    await SecureStore.deleteItemAsync(SAVED_EMAIL_KEY);
-    await SecureStore.deleteItemAsync(SAVED_PASSWORD_KEY);
-  } catch {
-    // Ignore errors during cleanup
-  }
+export function clearSavedCredentials(): Promise<void> {
+  return secureWrite(async () => {
+    const results = await Promise.allSettled([
+      SecureStore.deleteItemAsync(SAVED_EMAIL_KEY),
+      SecureStore.deleteItemAsync(SAVED_PASSWORD_KEY),
+    ]);
+    if (results.some(result => result.status === 'rejected')) {
+      throw new Error('Saved credentials could not be completely cleared.');
+    }
+  });
 }
 
 async function getAuthHeaders(additionalHeaders: Record<string, string> = {}): Promise<Record<string, string>> {
+  const generation = getSessionGeneration();
   const token = await getAuthToken();
+  assertSessionGeneration(generation);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...additionalHeaders,
@@ -68,6 +80,7 @@ async function getAuthHeaders(additionalHeaders: Record<string, string> = {}): P
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  headerSessions.set(headers, generation);
   return headers;
 }
 
@@ -93,12 +106,19 @@ async function verifyStagingEndpoint(): Promise<void> {
   await stagingCheck;
 }
 
+const responseTokens = new WeakMap<Response, string | null>();
+
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000): Promise<Response> {
+  const generation = (options.headers && headerSessions.get(options.headers as object)) ?? getSessionGeneration();
   await verifyStagingEndpoint();
+  assertSessionGeneration(generation);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    assertSessionGeneration(generation);
+    responseTokens.set(response, new Headers(options.headers).get('Authorization'));
+    return response;
   } finally {
     clearTimeout(timer);
   }
@@ -106,18 +126,23 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout 
 
 let _onUnauthorized: (() => void) | null = null;
 
-export function setOnUnauthorized(callback: () => void) {
+export function setOnUnauthorized(callback: (() => void) | null) {
   _onUnauthorized = callback;
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     if (response.status === 401) {
-      await clearAuthToken();
-      _onUnauthorized?.();
+      const sentToken = responseTokens.get(response);
+      const currentToken = await getAuthToken();
+      // An old request must not expire a newer login or account.
+      if (currentToken && sentToken === `Bearer ${currentToken}`) {
+        if (_onUnauthorized) _onUnauthorized();
+        else await clearAuthToken();
+      }
     }
     const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || `HTTP error! status: ${response.status}`);
+    throw Object.assign(new Error(error.error || `HTTP error! status: ${response.status}`), { status: response.status });
   }
   if (response.status === 204) {
     return undefined as T;
@@ -249,7 +274,7 @@ export const transactionsApi = {
       method: 'POST', headers, body: JSON.stringify(transaction),
     }).catch((err) => { throw new Error(`Failed to create transaction: ${err.message}`); });
     const t = await handleResponse<any>(response);
-    return { ...t, isRecurring: Boolean(t.isRecurring), bucketId: t.bucketId || undefined, recurringId: t.recurringId || undefined };
+    return { ...t, isRecurring: Boolean(t.isRecurring), bucketId: t.bucketId || undefined, recurringId: t.recurringId || undefined, tags: t.tags ? (typeof t.tags === 'string' ? JSON.parse(t.tags) : t.tags) : undefined, notes: t.notes || undefined };
   },
   update: async (id: string, updates: Partial<Transaction>): Promise<Transaction> => {
     const headers = await getAuthHeaders();

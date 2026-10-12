@@ -11,7 +11,7 @@ function load(name, env = {}, mocks = {}, fetch = () => { throw Error('Unexpecte
   const source = readFileSync(new URL(`../mobile/src/utils/${name}.ts`, import.meta.url), 'utf8');
   const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true } });
   const exports = {};
-  runInNewContext(outputText, { exports, process: { env }, URL, AbortController, setTimeout, clearTimeout, console, fetch,
+  runInNewContext(outputText, { exports, process: { env }, URL, Headers, AbortController, setTimeout, clearTimeout, console, fetch,
     require: name => { if (!(name in mocks)) throw Error(`Unexpected module ${name}`); return mocks[name]; } });
   return exports;
 }

@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useAuth } from './AuthContext';
+import { getSessionGeneration } from '../utils/api';
 import { useTheme } from './ThemeContext';
 
 interface ToastOptions {
   duration?: number;
-  onUndo?: () => void;
+  onUndo?: () => Promise<void>;
 }
 
 interface ToastContextType {
@@ -17,30 +19,61 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const { theme } = useTheme();
   const [visible, setVisible] = useState(false);
   const [message, setMessage] = useState('');
-  const [onUndo, setOnUndo] = useState<(() => void) | undefined>();
-  const [timeoutId, setTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const { user } = useAuth();
+  const [onUndo, setOnUndo] = useState<(() => Promise<void>) | undefined>();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const timeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const revision = useRef(0);
+  const running = useRef(false);
+  const owner = useRef(getSessionGeneration());
+  const session = getSessionGeneration();
+  const clearTimer = () => { if (timeout.current) clearTimeout(timeout.current); timeout.current = null; };
+  useEffect(() => {
+    revision.current += 1;
+    clearTimer();
+    setVisible(false);
+    setOnUndo(undefined);
+    setBusy(false);
+    running.current = false;
+    return clearTimer;
+  }, [user?.id, session]);
 
   const show = useCallback((msg: string, options?: ToastOptions) => {
-    if (timeoutId) clearTimeout(timeoutId);
+    clearTimer();
+    const current = ++revision.current;
+    owner.current = getSessionGeneration();
+    running.current = false;
+    setBusy(false);
+    setFailed(false);
     setMessage(msg);
     setOnUndo(() => options?.onUndo);
     setVisible(true);
-
-    const duration = options?.duration ?? (options?.onUndo ? 5000 : 3000);
-    const id = setTimeout(() => {
+    timeout.current = setTimeout(() => {
+      if (revision.current !== current) return;
       setVisible(false);
       setOnUndo(undefined);
-      setTimeoutId(null);
-    }, duration);
-    setTimeoutId(id);
-  }, [timeoutId]);
+    }, options?.duration ?? (options?.onUndo ? 8000 : 3000));
+  }, []);
 
-  const handleUndo = useCallback(() => {
-    if (timeoutId) clearTimeout(timeoutId);
-    setTimeoutId(null);
-    onUndo?.();
-    setVisible(false);
-  }, [onUndo, timeoutId]);
+  const handleUndo = useCallback(async () => {
+    if (!onUndo || running.current || owner.current !== getSessionGeneration()) return;
+    const current = revision.current;
+    clearTimer();
+    running.current = true;
+    setBusy(true);
+    try {
+      await onUndo();
+      if (revision.current === current) { setVisible(false); setOnUndo(undefined); }
+    } catch {
+      if (revision.current === current && owner.current === getSessionGeneration()) {
+        setMessage('Undo could not finish. Check your connection and retry.');
+        setFailed(true);
+      }
+    } finally {
+      if (revision.current === current) { running.current = false; setBusy(false); }
+    }
+  }, [onUndo]);
 
   const styles = createStyles(theme);
 
@@ -48,13 +81,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={{ show }}>
       <View style={{ flex: 1 }} collapsable={false}>
         {children}
-        {visible && (
+        {visible && owner.current === session && (
           <View style={styles.container} pointerEvents="box-none">
             <View style={styles.toast}>
             <Text style={styles.message} numberOfLines={2}>{message}</Text>
             {onUndo && (
-              <TouchableOpacity onPress={handleUndo} style={styles.undoBtn}>
-                <Text style={styles.undoText}>Undo</Text>
+              <TouchableOpacity onPress={handleUndo} disabled={busy} accessibilityRole="button" style={styles.undoBtn}>
+                <Text style={styles.undoText}>{busy ? 'Restoring…' : failed ? 'Retry undo' : 'Undo'}</Text>
               </TouchableOpacity>
             )}
           </View>

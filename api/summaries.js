@@ -289,32 +289,21 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'id is required' });
       }
 
-      // Try to delete from monthly_summaries first
-      const monthlyResult = await supabase
-        .from('monthly_summaries')
-        .delete()
-        .eq('id', id);
-
-      if (!monthlyResult.error) {
-        return res.status(204).send();
+      const { type } = req.query;
+      if (type !== undefined && type !== 'monthly' && type !== 'yearly') {
+        return res.status(400).json({ error: 'type must be either "monthly" or "yearly"' });
       }
-
-      // If not found, try yearly_summaries
-      const yearlyResult = await supabase
-        .from('yearly_summaries')
-        .delete()
-        .eq('id', id);
-
-      if (!yearlyResult.error) {
-        return res.status(204).send();
+      // Old clients omit type. A successful zero-row delete does not mean that
+      // the record existed: keep looking in yearly_summaries in that case.
+      const tables = type ? [`${type}_summaries`] : ['monthly_summaries', 'yearly_summaries'];
+      for (const table of tables) {
+        const { data, error } = await supabase.from(table)
+          .delete().eq('id', id).eq('user_id', user.id).select('id');
+        if (error) throw error;
+        if (data?.length) return res.status(204).send();
       }
-
-      // If error is "not found", return 204 anyway (idempotent delete)
-      if (monthlyResult.error.code === 'PGRST116' && yearlyResult.error.code === 'PGRST116') {
-        return res.status(204).send();
-      }
-
-      throw monthlyResult.error || yearlyResult.error;
+      // Preserve idempotent deletion and do not reveal another account's IDs.
+      return res.status(204).send();
     }
 
     return res.status(405).json({ error: 'Method not allowed' });

@@ -105,7 +105,7 @@ function computeSavingsScore(transactions: Transaction[], budgets: Budget[], buc
   return Math.round(Math.min(100, Math.max(0, score)));
 }
 
-export default function SummaryScreen() {
+export default function SummaryScreen({ navigation }: any) {
   const { theme } = useTheme();
   const { state, loading, refreshAll, error } = useAppState();
   const { layout } = useLayout();
@@ -311,11 +311,17 @@ export default function SummaryScreen() {
           <View key="budgetStatus" style={styles.section}>
             <Text style={styles.sectionTitle}>Budget Status</Text>
             <Text style={styles.emptyText}>No budgets set for this month</Text>
+            <TouchableOpacity accessibilityRole="button" style={{ minHeight: 48, justifyContent: 'center' }} onPress={() => navigation.navigate('MoreTab', { screen: 'Budgets', initial: false })}>
+              <Text style={{ color: theme.colors.primary, fontSize: theme.fontSize.md, fontWeight: '600' }}>Set up a budget</Text>
+            </TouchableOpacity>
           </View>
         );
         return (
           <View key="budgetStatus" style={styles.section}>
             <Text style={styles.sectionTitle}>Budget Status</Text>
+            <TouchableOpacity accessibilityRole="button" style={{ minHeight: 48, justifyContent: 'center' }} onPress={() => navigation.navigate('MoreTab', { screen: 'Budgets', initial: false })}>
+              <Text style={{ color: theme.colors.primary, fontSize: theme.fontSize.md, fontWeight: '600' }}>Manage budgets</Text>
+            </TouchableOpacity>
             {monthBudgets.map(b => {
               const bucket = state.buckets.find(bk => bk.id === b.bucketId);
               const spent = state.transactions
@@ -377,7 +383,9 @@ export default function SummaryScreen() {
         return (
           <View key="summaryNotes" style={styles.section}>
             <Text style={styles.sectionTitle}>Notes</Text>
-            <Text style={styles.emptyText}>View and manage reflections in the Reflections screen</Text>
+            <TouchableOpacity accessibilityRole="button" style={{ minHeight: 48, justifyContent: 'center' }} onPress={() => navigation.navigate('MoreTab', { screen: 'Reflections', initial: false })}>
+              <Text style={{ color: theme.colors.primary, fontSize: theme.fontSize.md, fontWeight: '600' }}>Open reflections</Text>
+            </TouchableOpacity>
           </View>
         );
 

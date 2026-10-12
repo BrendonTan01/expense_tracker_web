@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useTheme, ThemePreference } from '../contexts/ThemeContext';
 import { hapticSelection } from '../utils/haptics';
-import { useLayout, DEFAULT_DASHBOARD_SECTIONS, DEFAULT_TABS } from '../contexts/LayoutContext';
+import { useLayout } from '../contexts/LayoutContext';
 import { useAuth } from '../contexts/AuthContext';
 import { ACCENT_PALETTES } from '../theme/colors';
 import { FontSizePreset } from '../theme/typography';
@@ -18,7 +18,7 @@ const FONT_SIZE_OPTIONS: { key: FontSizePreset; label: string }[] = [
   { key: 'xlarge', label: 'XL' },
 ];
 
-export default function SettingsScreen({ navigation }: any) {
+export default function SettingsScreen() {
   const { theme, prefs, setMode, setAccent, setFontSizePreset, setCompact } = useTheme();
   const { layout, toggleDashboardSection, toggleTab, resetLayout } = useLayout();
   const { user, logout } = useAuth();
@@ -164,31 +164,6 @@ export default function SettingsScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      {/* Manage */}
-      <Text style={styles.sectionHeader}>Manage</Text>
-      <View style={styles.card}>
-        <TouchableOpacity style={styles.navItem} onPress={() => { hapticSelection(); navigation.navigate('Buckets'); }}>
-          <Text style={styles.navItemText}>Buckets</Text>
-          <Text style={styles.navArrow}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => { hapticSelection(); navigation.navigate('Recurring'); }}>
-          <Text style={styles.navItemText}>Recurring Transactions</Text>
-          <Text style={styles.navArrow}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => { hapticSelection(); navigation.navigate('Budgets'); }}>
-          <Text style={styles.navItemText}>Budgets</Text>
-          <Text style={styles.navArrow}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => { hapticSelection(); navigation.navigate('Reflections'); }}>
-          <Text style={styles.navItemText}>Reflections</Text>
-          <Text style={styles.navArrow}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.navItem, { borderBottomWidth: 0 }]} onPress={() => { hapticSelection(); navigation.navigate('Backup'); }}>
-          <Text style={styles.navItemText}>Backup & Restore</Text>
-          <Text style={styles.navArrow}>›</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Account */}
       <Text style={styles.sectionHeader}>Account</Text>
       <View style={styles.card}>
@@ -250,9 +225,6 @@ function createStyles(theme: any) {
     switchLabel: { fontSize: theme.fontSize.md, color: theme.colors.text },
     resetBtn: { marginTop: theme.spacing.md, alignItems: 'center', padding: theme.spacing.sm },
     resetBtnText: { fontSize: theme.fontSize.sm, color: theme.colors.danger },
-    navItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: theme.spacing.md, borderBottomWidth: 1, borderBottomColor: theme.colors.borderLight },
-    navItemText: { fontSize: theme.fontSize.md, color: theme.colors.text },
-    navArrow: { fontSize: theme.fontSize.xl, color: theme.colors.textTertiary },
     infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     infoLabel: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
     infoValue: { fontSize: theme.fontSize.md, color: theme.colors.text, fontWeight: '500' },

@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { getDatabase } from '../database.js';
+import { JWT_SECRET } from '../auth-config.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const db = getDatabase();
 
 // Authentication middleware
@@ -15,7 +15,7 @@ export function authenticateToken(req, res, next) {
   const token = authHeader.substring(7);
   
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     
     // Verify user still exists
     const user = db.prepare('SELECT id FROM users WHERE id = ?').get(decoded.userId);

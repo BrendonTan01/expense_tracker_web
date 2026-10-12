@@ -25,12 +25,17 @@ function getAuthHeaders(additionalHeaders: Record<string, string> = {}): Record<
   return headers;
 }
 
+const responseTokens = new WeakMap<Response, string | null>();
+
 // Helper function to create a fetch with timeout
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    const sentToken = new Headers(options.headers).get('Authorization');
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    responseTokens.set(response, sentToken);
+    return response;
   } finally {
     clearTimeout(timer);
   }
@@ -41,8 +46,12 @@ async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     // If unauthorized, clear token and reload
     if (response.status === 401) {
-      localStorage.removeItem('auth_token');
-      window.location.reload();
+      const token = getAuthToken();
+      // A request from the previous account cannot clear a newer sign-in.
+      if (token && responseTokens.get(response) === `Bearer ${token}`) {
+        localStorage.removeItem('auth_token');
+        window.location.reload();
+      }
     }
     const error = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(error.error || `HTTP error! status: ${response.status}`);

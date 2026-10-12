@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity, TextInput,
   Alert, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
+import { reflectionKey, reflectionText, reflectionYears } from '../utils/reflections';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
 import { summariesApi } from '../utils/api';
@@ -16,6 +18,11 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'Ju
 type ViewMode = 'years' | 'year' | 'month';
 
 export default function ReflectionsScreen() {
+  const { user } = useAuth();
+  return user ? <AccountReflections key={user.id} /> : null;
+}
+
+function AccountReflections() {
   const { theme } = useTheme();
   const { state } = useAppState();
   const [viewMode, setViewMode] = useState<ViewMode>('years');
@@ -23,33 +30,43 @@ export default function ReflectionsScreen() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [monthlySummaries, setMonthlySummaries] = useState<MonthlySummary[]>([]);
   const [yearlySummaries, setYearlySummaries] = useState<YearlySummary[]>([]);
-  const [editText, setEditText] = useState('');
-  const [editId, setEditId] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const alive = useRef(true);
+  const saveInFlight = useRef(false);
+  const loadSequence = useRef(0);
 
   useEffect(() => {
-    loadSummaries();
+    alive.current = true;
+    void loadSummaries();
+    return () => { alive.current = false; loadSequence.current++; };
   }, []);
 
   const loadSummaries = async () => {
+    const sequence = ++loadSequence.current;
+    setLoading(true);
+    setLoadError(null);
     try {
       const [monthly, yearly] = await Promise.all([
-        summariesApi.getMonthly(),
-        summariesApi.getYearly(),
+        summariesApi.getMonthly(), summariesApi.getYearly(),
       ]);
+      if (!alive.current || sequence !== loadSequence.current) return;
       setMonthlySummaries(monthly);
       setYearlySummaries(yearly);
-    } catch (err) {
-      console.error('Failed to load summaries:', err);
+    } catch {
+      if (alive.current && sequence === loadSequence.current) {
+        setLoadError('Could not load reflections. Please try again.');
+      }
+    } finally {
+      if (alive.current && sequence === loadSequence.current) setLoading(false);
     }
   };
 
-  // Get unique years from transactions
-  const years = useMemo(() => {
-    const yearSet = new Set<number>();
-    state.transactions.forEach(t => yearSet.add(new Date(t.date).getFullYear()));
-    return Array.from(yearSet).sort((a, b) => b - a);
-  }, [state.transactions]);
+  const years = useMemo(() => reflectionYears(state.transactions, monthlySummaries, yearlySummaries, new Date().getFullYear()), [state.transactions, monthlySummaries, yearlySummaries]);
+  const draftKey = reflectionKey(selectedYear, viewMode === 'month' ? selectedMonth : undefined);
+  const changeDraft = (text: string) => setDrafts(current => ({ ...current, [draftKey]: text }));
 
   const getYearTotals = (year: number) => {
     const yearTxns = state.transactions.filter(t => new Date(t.date).getFullYear() === year);
@@ -77,27 +94,46 @@ export default function ReflectionsScreen() {
   };
 
   const handleSaveSummary = async (type: 'monthly' | 'yearly') => {
+    if (saveInFlight.current || loading || loadError) return;
+    saveInFlight.current = true;
     setSaving(true);
+    const key = reflectionKey(selectedYear, type === 'monthly' ? selectedMonth : undefined);
+    const existing = type === 'monthly'
+      ? monthlySummaries.find(s => s.year === selectedYear && s.month === selectedMonth)
+      : yearlySummaries.find(s => s.year === selectedYear);
+    const text = reflectionText(drafts, key, existing);
     try {
-      if (editId) {
-        await summariesApi.update(editId, editText, type);
-      } else {
-        const summary = type === 'monthly'
-          ? { id: generateId(), year: selectedYear, month: selectedMonth, summary: editText } as MonthlySummary
-          : { id: generateId(), year: selectedYear, summary: editText } as YearlySummary;
-        await summariesApi.create(summary);
-      }
-      await loadSummaries();
-      setEditText('');
-      setEditId(null);
+      const saved = existing
+        ? await summariesApi.update(existing.id, text, type)
+        : await summariesApi.create(type === 'monthly'
+          ? { id: generateId(), year: selectedYear, month: selectedMonth, summary: text }
+          : { id: generateId(), year: selectedYear, summary: text });
+      if (!alive.current) return;
+      // Apply the acknowledged result directly; a failed follow-up fetch must
+      // not turn a successful save into an apparent failure.
+      if (type === 'monthly') setMonthlySummaries(current => [...current.filter(s => s.year !== saved.year || s.month !== (saved as MonthlySummary).month), saved as MonthlySummary]);
+      else setYearlySummaries(current => [...current.filter(s => s.year !== saved.year), saved as YearlySummary]);
+      setDrafts(current => {
+        if (current[key] !== undefined && current[key] !== text) return current;
+        const next = { ...current }; delete next[key]; return next;
+      });
     } catch (err: any) {
-      Alert.alert('Error', err.message);
+      if (alive.current) Alert.alert('Could not save reflection', err.message || 'Please try again. Your draft is still here.');
     } finally {
-      setSaving(false);
+      saveInFlight.current = false;
+      if (alive.current) setSaving(false);
     }
   };
 
   const styles = createStyles(theme);
+
+  if (loading || loadError) return (
+    <View style={[styles.container, styles.scrollContent]}>
+      <Text style={styles.pageTitle}>Reflections</Text>
+      <Text style={styles.totalLabel}>{loading ? 'Loading reflections...' : loadError}</Text>
+      {!loading && <TouchableOpacity style={styles.saveBtn} onPress={() => void loadSummaries()}><Text style={styles.saveBtnText}>Try again</Text></TouchableOpacity>}
+    </View>
+  );
 
   if (viewMode === 'month') {
     const totals = getMonthTotals(selectedYear, selectedMonth);
@@ -130,11 +166,9 @@ export default function ReflectionsScreen() {
           <Text style={styles.sectionTitle}>Reflection</Text>
           <TextInput
             style={styles.textArea}
-            value={editText || existingSummary?.summary || ''}
-            onChangeText={(text) => {
-              setEditText(text);
-              if (existingSummary && !editId) setEditId(existingSummary.id);
-            }}
+            value={reflectionText(drafts, draftKey, existingSummary)}
+            editable={!saving}
+            onChangeText={changeDraft}
             placeholder="Write your thoughts about this month..."
             placeholderTextColor={theme.colors.textTertiary}
             multiline
@@ -182,11 +216,9 @@ export default function ReflectionsScreen() {
         <Text style={styles.sectionTitle}>Year Reflection</Text>
         <TextInput
           style={styles.textArea}
-          value={editText || existingSummary?.summary || ''}
-          onChangeText={(text) => {
-            setEditText(text);
-            if (existingSummary && !editId) setEditId(existingSummary.id);
-          }}
+          value={reflectionText(drafts, draftKey, existingSummary)}
+            editable={!saving}
+          onChangeText={changeDraft}
           placeholder="Write your thoughts about this year..."
           placeholderTextColor={theme.colors.textTertiary}
           multiline
@@ -208,7 +240,7 @@ export default function ReflectionsScreen() {
             <TouchableOpacity
               key={i}
               style={styles.monthItem}
-              onPress={() => { hapticSelection(); setSelectedMonth(i + 1); setEditText(''); setEditId(null); setViewMode('month'); }}
+              onPress={() => { hapticSelection(); setSelectedMonth(i + 1); setViewMode('month'); }}
             >
               <View>
                 <Text style={styles.monthName}>{name}</Text>
@@ -238,7 +270,7 @@ export default function ReflectionsScreen() {
           return (
             <TouchableOpacity
               style={styles.yearItem}
-              onPress={() => { hapticSelection(); setSelectedYear(year); setEditText(''); setEditId(null); setViewMode('year'); }}
+              onPress={() => { hapticSelection(); setSelectedYear(year); setViewMode('year'); }}
             >
               <View>
                 <Text style={styles.yearTitle}>{year}</Text>

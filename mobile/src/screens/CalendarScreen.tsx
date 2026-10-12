@@ -8,6 +8,7 @@ import { useAppState } from '../contexts/AppStateContext';
 import { formatCurrency, formatDate, todayIsoLocal } from '../utils/dateHelpers';
 import { hapticLight, hapticSelection } from '../utils/haptics';
 import { Transaction } from '../types';
+import { transactionEntry } from '../navigation/transactionEntry';
 
 type CalendarMode = 'month' | 'day';
 
@@ -156,6 +157,14 @@ export default function CalendarScreen({ navigation }: any) {
       {/* Selected Day Summary */}
       <View style={styles.daySummary}>
         <Text style={styles.dayTitle}>{formatDate(selectedDate)}</Text>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`Add transaction on ${formatDate(selectedDate)}`}
+          style={{ minHeight: 48, justifyContent: 'center' }}
+          onPress={() => { hapticSelection(); navigation.navigate('TransactionForm', transactionEntry({ initialDate: selectedDate })); }}
+        >
+          <Text style={{ color: theme.colors.primary, fontWeight: '600', fontSize: theme.fontSize.md }}>+ Add on this day</Text>
+        </TouchableOpacity>
         <View style={styles.dayTotals}>
           {selectedDayTotals.income > 0 && (
             <View style={styles.dayTotal}>
@@ -187,7 +196,7 @@ export default function CalendarScreen({ navigation }: any) {
               style={styles.txnItem}
               onPress={() => {
                 hapticSelection();
-                navigation.navigate('TransactionForm', { transaction: t });
+                navigation.navigate('TransactionForm', transactionEntry({ transaction: t }));
               }}
             >
               <View style={[styles.typeDot, { backgroundColor: typeColor(t.type) }]} />

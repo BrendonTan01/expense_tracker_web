@@ -1,5 +1,6 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import MoreScreen from '../screens/MoreScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import BucketsScreen from '../screens/BucketsScreen';
 import BudgetsScreen from '../screens/BudgetsScreen';
@@ -16,6 +17,7 @@ export default function MoreStack() {
 
   return (
     <Stack.Navigator
+      initialRouteName="MoreHome"
       screenOptions={{
         headerStyle: { backgroundColor: theme.colors.surface },
         headerTintColor: theme.colors.text,
@@ -24,6 +26,7 @@ export default function MoreStack() {
         contentStyle: { backgroundColor: theme.colors.background },
       }}
     >
+      <Stack.Screen name="MoreHome" component={MoreScreen} options={{ title: 'More' }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
       <Stack.Screen name="Templates" component={TemplatesScreen} options={{ title: 'Transaction Templates' }} />
       <Stack.Screen name="Buckets" component={BucketsScreen} options={{ title: 'Buckets' }} />

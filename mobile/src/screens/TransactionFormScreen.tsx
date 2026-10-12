@@ -30,7 +30,7 @@ export default function TransactionFormScreen({ navigation, route }: any) {
   const amountError = getMoneyInputError(amount, amountTouched);
   const [description, setDescription] = useState(editTransaction?.description || templateFromNav?.description || '');
   const [bucketId, setBucketId] = useState<string | undefined>(editTransaction?.bucketId ?? templateFromNav?.bucketId);
-  const [date, setDate] = useState(editTransaction?.date || todayIsoLocal());
+  const [date, setDate] = useState(editTransaction?.date || route.params?.initialDate || todayIsoLocal());
   const [tags, setTags] = useState<string[]>(editTransaction?.tags || templateFromNav?.tags || []);
   const [tagInput, setTagInput] = useState('');
   const [notes, setNotes] = useState(editTransaction?.notes || templateFromNav?.notes || '');

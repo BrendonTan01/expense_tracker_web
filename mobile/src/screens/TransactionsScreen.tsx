@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity, TextInput,
   RefreshControl, Alert,
@@ -8,8 +8,9 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
 import { useToast } from '../contexts/ToastContext';
 import { formatCurrency, formatDate } from '../utils/dateHelpers';
-import { generateId } from '../utils/storage';
+import { getSessionGeneration, assertSessionGeneration } from '../utils/api';
 import { Transaction } from '../types';
+import { transactionEntry } from '../navigation/transactionEntry';
 import { hapticMedium, hapticSelection } from '../utils/haptics';
 
 type SortField = 'date' | 'amount';
@@ -17,7 +18,7 @@ type SortDir = 'asc' | 'desc';
 
 export default function TransactionsScreen({ navigation }: any) {
   const { theme } = useTheme();
-  const { state, deleteTransaction, deleteTransactions, addTransaction, refreshAll, error } = useAppState();
+  const { state, deleteTransactions, createDeleteUndo, refreshAll, error } = useAppState();
   const toast = useToast();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'expense' | 'income' | 'investment'>('all');
@@ -26,11 +27,19 @@ export default function TransactionsScreen({ navigation }: any) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const deleteRunning = useRef(false);
+  const session = getSessionGeneration();
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+  }, [session]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refreshAll();
-    setRefreshing(false);
+    try { await refreshAll(); }
+    catch { /* Account changes cancel stale refresh callbacks. */ }
+    finally { setRefreshing(false); }
   }, [refreshAll]);
 
   const filtered = useMemo(() => {
@@ -77,48 +86,46 @@ export default function TransactionsScreen({ navigation }: any) {
     setSelectedIds(new Set([id]));
   };
 
-  const performDeleteWithUndo = useCallback((txn: Transaction) => {
-    deleteTransaction(txn.id);
-    toast.show(`"${txn.description}" deleted`, {
-      onUndo: () => {
-        const { id, isRecurring, recurringId, ...rest } = txn;
-        addTransaction({ id: generateId(), ...rest, isRecurring: false, recurringId: undefined });
-      },
-    });
-  }, [deleteTransaction, addTransaction, toast]);
+  const performDelete = useCallback(async (txns: Transaction[]) => {
+    if (deleteRunning.current || txns.length === 0) return;
+    deleteRunning.current = true;
+    setDeleting(true);
+    try {
+      assertSessionGeneration(session);
+      const result = await deleteTransactions(txns.map(t => t.id));
+      assertSessionGeneration(session);
+      setSelectedIds(new Set(result.failedIds));
+      setSelectionMode(result.failedIds.length > 0);
+      const deleted = txns.filter(t => result.deletedIds.includes(t.id));
+      if (deleted.length) {
+        toast.show(result.failedIds.length
+          ? `${deleted.length} deleted; ${result.failedIds.length} could not be confirmed. Refresh before retrying.`
+          : `${deleted.length === 1 ? 'Transaction' : `${deleted.length} transactions`} deleted`, {
+          onUndo: createDeleteUndo(deleted),
+          duration: result.failedIds.length ? 15000 : 8000,
+        });
+      } else {
+        Alert.alert('Deletion not confirmed', 'Check your connection and refresh before retrying. No undo is available until deletion is confirmed.');
+      }
+    } catch (error) {
+      if (session === getSessionGeneration()) {
+        Alert.alert('Could not delete', error instanceof Error ? error.message : 'Please try again.');
+      }
+    } finally {
+      deleteRunning.current = false;
+      setDeleting(false);
+    }
+  }, [deleteTransactions, createDeleteUndo, toast, session]);
+
+  const performDeleteWithUndo = useCallback((txn: Transaction) => performDelete([txn]), [performDelete]);
 
   const handleDeleteSelected = () => {
-    Alert.alert(
-      'Delete Transactions',
-      `Delete ${selectedIds.size} selected transaction(s)?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const toDelete = Array.from(selectedIds);
-            const txns = toDelete.map(id => state.transactions.find(t => t.id === id)).filter(Boolean) as Transaction[];
-            await deleteTransactions(toDelete);
-            setSelectedIds(new Set());
-            setSelectionMode(false);
-            if (txns.length === 1) {
-              const { id, isRecurring, recurringId, ...rest } = txns[0];
-              toast.show('Transaction deleted', {
-                onUndo: () => addTransaction({ id: generateId(), ...rest, isRecurring: false, recurringId: undefined }),
-              });
-            } else if (txns.length > 1) {
-              toast.show(`${txns.length} transactions deleted`, {
-                onUndo: () => Promise.all(txns.map(t => {
-                  const { id, isRecurring, recurringId, ...rest } = t;
-                  return addTransaction({ id: generateId(), ...rest, isRecurring: false, recurringId: undefined });
-                })),
-              });
-            }
-          },
-        },
-      ]
-    );
+    if (deleteRunning.current || !selectedIds.size) return;
+    const txns = state.transactions.filter(t => selectedIds.has(t.id));
+    Alert.alert('Delete Transactions', `Delete ${txns.length} selected transaction(s)?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => { void performDelete(txns); } },
+    ]);
   };
 
   const handleDelete = (txn: Transaction) => {
@@ -152,6 +159,7 @@ export default function TransactionsScreen({ navigation }: any) {
   const renderRightActions = (item: Transaction) => (
     <TouchableOpacity
       style={styles.swipeDelete}
+      disabled={deleting}
       onPress={() => performDeleteWithUndo(item)}
       accessibilityRole="button"
       accessibilityLabel={`Delete ${item.description}`}
@@ -174,7 +182,7 @@ export default function TransactionsScreen({ navigation }: any) {
             if (selectionMode) {
               toggleSelect(item.id);
             } else {
-              navigation.navigate('TransactionForm', { transaction: item });
+              navigation.navigate('TransactionForm', transactionEntry({ transaction: item }));
             }
           }}
           onLongPress={() => handleLongPress(item.id)}
@@ -214,7 +222,7 @@ export default function TransactionsScreen({ navigation }: any) {
               {item.type === 'income' ? '+' : '-'}{formatCurrency(item.amount)}
             </Text>
             {!selectionMode && (
-              <TouchableOpacity onPress={() => { hapticSelection(); handleDelete(item); }} style={styles.deleteBtn} accessibilityLabel={`Delete ${item.description}`}>
+              <TouchableOpacity disabled={deleting} onPress={() => { hapticSelection(); handleDelete(item); }} style={styles.deleteBtn} accessibilityLabel={`Delete ${item.description}`}>
                 <Text style={styles.deleteBtnText}>Delete</Text>
               </TouchableOpacity>
             )}
@@ -289,8 +297,8 @@ export default function TransactionsScreen({ navigation }: any) {
       {selectionMode && (
         <View style={styles.selectionBar}>
           <Text style={styles.selectionText}>{selectedIds.size} selected</Text>
-          <TouchableOpacity onPress={() => { hapticSelection(); handleDeleteSelected(); }} style={styles.selectionDeleteBtn}>
-            <Text style={styles.selectionDeleteText}>Delete Selected</Text>
+          <TouchableOpacity disabled={deleting || !selectedIds.size} onPress={() => { hapticSelection(); handleDeleteSelected(); }} style={styles.selectionDeleteBtn}>
+            <Text style={styles.selectionDeleteText}>{deleting ? 'Deleting…' : 'Delete Selected'}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => { hapticSelection(); setSelectionMode(false); setSelectedIds(new Set()); }} style={styles.selectionCancelBtn}>
             <Text style={styles.selectionCancelText}>Cancel</Text>

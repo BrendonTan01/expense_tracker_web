@@ -1,5 +1,5 @@
 import { parseMoneyInput, getMoneyInputError } from '../utils/money';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
   Alert, Modal, KeyboardAvoidingView, Platform, Switch,
@@ -7,13 +7,25 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
 import { TransactionTemplate } from '../types';
-import { loadFromStorage, saveToStorage, generateId } from '../utils/storage';
+import { getStorageKey, generateId } from '../utils/storage';
 import { hapticSelection, hapticSuccess } from '../utils/haptics';
 import { formatCurrency } from '../utils/dateHelpers';
 
-const STORAGE_KEY = 'transaction_templates';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../contexts/AuthContext';
+import { templateStorageKey } from '../utils/templateStorage';
+import { transactionEntry } from '../navigation/transactionEntry';
 
 export default function TemplatesScreen({ navigation }: any) {
+  const { user } = useAuth();
+  return user ? <AccountTemplates key={user.id} userId={user.id} navigation={navigation} /> : null;
+}
+
+function AccountTemplates({ userId, navigation }: { userId: string; navigation: any }) {
+  const storageKey = getStorageKey(templateStorageKey(userId));
+  const active = useRef(true);
+  const busy = useRef(false);
+  const [ready, setReady] = useState(false);
   const { theme } = useTheme();
   const { state } = useAppState();
   const [templates, setTemplates] = useState<TransactionTemplate[]>([]);
@@ -34,15 +46,33 @@ export default function TemplatesScreen({ navigation }: any) {
   const amountError = getMoneyInputError(amountInput, amountTouched, true);
 
   useEffect(() => {
-    loadFromStorage<TransactionTemplate[]>(STORAGE_KEY, []).then(setTemplates);
-  }, []);
+    active.current = true;
+    let cancelled = false;
+    AsyncStorage.getItem(storageKey).then(raw => {
+      if (cancelled) return;
+      const saved = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(saved)) throw new Error('Invalid saved templates');
+      setTemplates(saved);
+      setReady(true);
+    }).catch(() => { if (!cancelled) Alert.alert('Could not load templates', 'Please reopen this screen to try again.'); });
+    return () => { cancelled = true; active.current = false; };
+  }, [storageKey]);
 
-  const saveTemplates = (newTemplates: TransactionTemplate[]) => {
-    setTemplates(newTemplates);
-    saveToStorage(STORAGE_KEY, newTemplates);
+  const saveTemplates = async (newTemplates: TransactionTemplate[]): Promise<boolean> => {
+    if (!active.current || !ready || busy.current) return false;
+    busy.current = true;
+    try {
+      await AsyncStorage.setItem(storageKey, JSON.stringify(newTemplates));
+      if (!active.current) return false;
+      setTemplates(newTemplates);
+      return true;
+    } catch {
+      if (active.current) Alert.alert('Could not save template', 'Your changes have not been saved. Please try again.');
+      return false;
+    } finally { busy.current = false; }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setAmountTouched(true);
     const parsedAmount = amountInput.trim() === '' ? undefined : parseMoneyInput(amountInput);
     if (parsedAmount === null) return;
@@ -56,11 +86,10 @@ export default function TemplatesScreen({ navigation }: any) {
       amount: parsedAmount,
       bucketId: formData.type === 'expense' && formData.bucketId ? formData.bucketId : undefined,
     };
-    if (editingTemplate) {
-      saveTemplates(templates.map(t => t.id === editingTemplate.id ? template : t));
-    } else {
-      saveTemplates([...templates, template]);
-    }
+    const saved = await saveTemplates(editingTemplate
+      ? templates.map(t => t.id === editingTemplate.id ? template : t)
+      : [...templates, template]);
+    if (!saved) return;
     hapticSuccess();
     resetForm();
   };
@@ -85,7 +114,7 @@ export default function TemplatesScreen({ navigation }: any) {
   const handleDelete = (id: string) => {
     Alert.alert('Delete Template', 'Delete this template?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => saveTemplates(templates.filter(t => t.id !== id)) },
+      { text: 'Delete', style: 'destructive', onPress: () => { void saveTemplates(templates.filter(t => t.id !== id)); } },
     ]);
   };
 
@@ -121,7 +150,7 @@ export default function TemplatesScreen({ navigation }: any) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      <TouchableOpacity style={styles.addBtn} onPress={() => {
+      <TouchableOpacity disabled={!ready} style={styles.addBtn} onPress={() => {
         hapticSelection();
         setEditingTemplate(null);
         setAmountTouched(false);
@@ -155,7 +184,7 @@ export default function TemplatesScreen({ navigation }: any) {
               <View style={styles.templateActions}>
                 <TouchableOpacity style={styles.useBtn} onPress={() => {
                   hapticSelection();
-                  navigation.navigate('TransactionsTab', { screen: 'TransactionForm', params: { template } });
+                  navigation.navigate('TransactionsTab', { screen: 'TransactionForm', params: transactionEntry({ template }), initial: false });
                 }}>
                   <Text style={styles.useBtnText}>Use</Text>
                 </TouchableOpacity>

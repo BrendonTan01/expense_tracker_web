@@ -1,16 +1,24 @@
 import { parseMoneyInput, getMoneyInputError } from '../utils/money';
 import { useState, useEffect } from 'react';
 import { TransactionTemplate, Bucket } from '../types';
-import { saveToLocalStorage, loadFromLocalStorage, generateId } from '../utils/storage';
+import { getStorageKey, generateId } from '../utils/storage';
 
 interface TransactionTemplatesProps {
   buckets: Bucket[];
   onUseTemplate: (template: TransactionTemplate) => void;
 }
 
-const STORAGE_KEY = 'transaction_templates';
+import { useAuth } from '../contexts/AuthContext';
+import { templateStorageKey } from '../utils/templateStorage';
 
 export default function TransactionTemplates({ buckets, onUseTemplate }: TransactionTemplatesProps) {
+  const { user } = useAuth();
+  return user ? <AccountTemplates key={user.id} userId={user.id} buckets={buckets} onUseTemplate={onUseTemplate} /> : null;
+}
+
+function AccountTemplates({ userId, buckets, onUseTemplate }: TransactionTemplatesProps & { userId: string }) {
+  const storageKey = getStorageKey(templateStorageKey(userId));
+  const [ready, setReady] = useState(false);
   const [templates, setTemplates] = useState<TransactionTemplate[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<TransactionTemplate | null>(null);
@@ -30,13 +38,25 @@ export default function TransactionTemplates({ buckets, onUseTemplate }: Transac
   const amountError = getMoneyInputError(amountInput, amountTouched, true);
 
   useEffect(() => {
-    const saved = loadFromLocalStorage<TransactionTemplate[]>(STORAGE_KEY, []);
-    setTemplates(saved);
-  }, []);
+    try {
+      const raw = localStorage.getItem(storageKey);
+      const saved = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(saved)) throw new Error('Invalid saved templates');
+      setTemplates(saved);
+      setReady(true);
+    } catch { window.alert('Could not load templates. Reopen this screen to try again.'); }
+  }, [storageKey]);
 
-  const saveTemplates = (newTemplates: TransactionTemplate[]) => {
-    setTemplates(newTemplates);
-    saveToLocalStorage(STORAGE_KEY, newTemplates);
+  const saveTemplates = (newTemplates: TransactionTemplate[]): boolean => {
+    if (!ready) return false;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(newTemplates));
+      setTemplates(newTemplates);
+      return true;
+    } catch {
+      window.alert('Your template changes could not be saved. Please try again.');
+      return false;
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -53,11 +73,10 @@ export default function TransactionTemplates({ buckets, onUseTemplate }: Transac
       bucketId: formData.type === 'expense' && formData.bucketId ? formData.bucketId : undefined,
     };
 
-    if (editingTemplate) {
-      saveTemplates(templates.map(t => t.id === editingTemplate.id ? template : t));
-    } else {
-      saveTemplates([...templates, template]);
-    }
+    const saved = saveTemplates(editingTemplate
+      ? templates.map(t => t.id === editingTemplate.id ? template : t)
+      : [...templates, template]);
+    if (!saved) return;
 
     setFormData({
       name: '',
@@ -112,6 +131,7 @@ export default function TransactionTemplates({ buckets, onUseTemplate }: Transac
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h3>Transaction Templates</h3>
         <button
+          disabled={!ready}
           onClick={() => {
             setShowForm(!showForm);
             if (showForm) {
