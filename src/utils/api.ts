@@ -239,7 +239,20 @@ const isValidRecurringTransaction = (r: RecurringTransaction | null): r is Recur
   return r !== null;
 };
 
+export type RecurringEditPatch = Omit<Partial<RecurringTransaction>, 'id' | 'endDate' | 'lastApplied'> & {
+  endDate?: string | null;
+  lastApplied?: string | null;
+};
+export type RecurringEditResult = { recurring: RecurringTransaction | null; updated: number; replayed: boolean };
+
 export const recurringApi = {
+  edit: async (id: string, updates: RecurringEditPatch, options: { historyScope: 'none' | 'all' | 'fromNext'; today: string; requestId: string }): Promise<RecurringEditResult> => {
+    const headers = getAuthHeaders();
+    const response = await fetchWithTimeout(`${API_BASE_URL}/recurring/${encodeURIComponent(id)}?action=edit`, {
+      method: 'PUT', headers, body: JSON.stringify({ updates, ...options }),
+    }, 30000);
+    return handleResponse<RecurringEditResult>(response);
+  },
   process: async (today: string): Promise<{ created: number; available?: boolean }> => {
     // Old servers ignore action and return their recurring list. Probe with a GET
     // before sending a new POST operation that an old server would misinterpret.
@@ -379,6 +392,13 @@ export const recurringApi = {
 
 // Budgets API
 export const budgetsApi = {
+  createBatch: async (budgets: Budget[], requestId: string): Promise<{ budgets: Budget[]; replayed: boolean }> => {
+    const headers = getAuthHeaders();
+    const response = await fetchWithTimeout(`${API_BASE_URL}/budgets?action=batch`, {
+      method: 'POST', headers, body: JSON.stringify({ budgets, requestId }),
+    }, 30000);
+    return handleResponse<{ budgets: Budget[]; replayed: boolean }>(response);
+  },
   getAll: async (params?: { bucketId?: string; period?: string; year?: number; month?: number }): Promise<Budget[]> => {
     const queryParams = new URLSearchParams();
     if (params?.bucketId) queryParams.append('bucketId', params.bucketId);

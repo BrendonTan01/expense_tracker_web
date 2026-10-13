@@ -1,3 +1,5 @@
+import { withFinancialErrorBoundary } from '../components/FinancialErrorBoundary';
+import { addMoney, subtractMoney } from '../utils/money';
 import React, { useMemo, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Dimensions,
@@ -40,7 +42,7 @@ function getDateRange(period: PeriodFilter): { start: string; end: string } {
     }
     case 'allTime':
     default:
-      return { start: '1970-01-01', end: '2099-12-31' };
+      return { start: '0001-01-01', end: '9999-12-31' };
   }
 }
 
@@ -51,12 +53,12 @@ function filterTransactions(transactions: Transaction[], start: string, end: str
 function computeTotals(transactions: Transaction[]) {
   let income = 0, expenses = 0, investments = 0;
   transactions.forEach(t => {
-    if (t.type === 'income') income += t.amount;
-    else if (t.type === 'expense') expenses += t.amount;
-    else if (t.type === 'investment') investments += t.amount;
+    if (t.type === 'income') income = addMoney(income, t.amount);
+    else if (t.type === 'expense') expenses = addMoney(expenses, t.amount);
+    else if (t.type === 'investment') investments = addMoney(investments, t.amount);
   });
-  const net = income - expenses - investments;
-  const savingPct = income > 0 ? ((income - expenses - investments) / income) * 100 : 0;
+  const net = subtractMoney(income, expenses, investments);
+  const savingPct = income > 0 ? ((subtractMoney(income, expenses, investments)) / income) * 100 : 0;
   return { income, expenses, investments, net, savingPct };
 }
 
@@ -65,28 +67,28 @@ function computeSavingsScore(transactions: Transaction[], budgets: Budget[], buc
   let score = 0;
   // Saving rate (40 pts)
   if (income > 0) {
-    const rate = (income - expenses - investments) / income;
+    const rate = (subtractMoney(income, expenses, investments)) / income;
     score += Math.max(0, Math.min(40, rate * 100));
   }
   // Expense trend (30 pts) - simple: if current month expenses < last month
   const now = new Date();
   const thisMonthTxns = transactions.filter(t => {
-    const d = new Date(t.date);
+    const d = parseIsoDateLocal(t.date);
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && t.type === 'expense';
   });
   const lastMonthTxns = transactions.filter(t => {
-    const d = new Date(t.date);
+    const d = parseIsoDateLocal(t.date);
     const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     return d.getMonth() === lm.getMonth() && d.getFullYear() === lm.getFullYear() && t.type === 'expense';
   });
-  const thisMonthExp = thisMonthTxns.reduce((s, t) => s + t.amount, 0);
-  const lastMonthExp = lastMonthTxns.reduce((s, t) => s + t.amount, 0);
+  const thisMonthExp = thisMonthTxns.reduce((s, t) => addMoney(s, t.amount), 0);
+  const lastMonthExp = lastMonthTxns.reduce((s, t) => addMoney(s, t.amount), 0);
   if (lastMonthExp > 0 && thisMonthExp <= lastMonthExp) score += 30;
-  else if (lastMonthExp > 0) score += Math.max(0, 30 - ((thisMonthExp - lastMonthExp) / lastMonthExp) * 30);
+  else if (lastMonthExp > 0) score += Math.max(0, 30 - ((subtractMoney(thisMonthExp, lastMonthExp)) / lastMonthExp) * 30);
   else score += 15;
   // Balance (20 pts)
-  if (income > expenses + investments) score += 20;
-  else if (income > 0) score += Math.max(0, 20 * (income / (expenses + investments + 1)));
+  if (income > addMoney(expenses, investments)) score += 20;
+  else if (income > 0) score += Math.max(0, 20 * (income / (addMoney(expenses, investments, 1))));
   // Budget adherence (10 pts)
   if (budgets.length > 0) {
     const month = now.getMonth() + 1;
@@ -94,7 +96,7 @@ function computeSavingsScore(transactions: Transaction[], budgets: Budget[], buc
     const monthBudgets = budgets.filter(b => b.period === 'monthly' && b.year === year && b.month === month);
     let adherent = 0;
     monthBudgets.forEach(b => {
-      const spent = transactions.filter(t => t.type === 'expense' && t.bucketId === b.bucketId && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === year).reduce((s, t) => s + t.amount, 0);
+      const spent = transactions.filter(t => t.type === 'expense' && t.bucketId === b.bucketId && parseIsoDateLocal(t.date).getMonth() + 1 === month && parseIsoDateLocal(t.date).getFullYear() === year).reduce((s, t) => addMoney(s, t.amount), 0);
       if (spent <= b.amount) adherent++;
     });
     if (monthBudgets.length > 0) score += (adherent / monthBudgets.length) * 10;
@@ -105,7 +107,7 @@ function computeSavingsScore(transactions: Transaction[], budgets: Budget[], buc
   return Math.round(Math.min(100, Math.max(0, score)));
 }
 
-export default function SummaryScreen({ navigation }: any) {
+function SummaryScreen({ navigation }: any) {
   const { theme } = useTheme();
   const { state, loading, refreshAll, error } = useAppState();
   const { layout } = useLayout();
@@ -243,7 +245,7 @@ export default function SummaryScreen({ navigation }: any) {
                     centerLabelComponent={() => (
                       <View style={{ alignItems: 'center' }}>
                         <Text style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary }}>Total</Text>
-                        <Text style={{ fontSize: theme.fontSize.sm, fontWeight: '600', color: theme.colors.text }}>{formatCurrency(categoryAvgs.reduce((s, c) => s + c.total, 0))}</Text>
+                        <Text style={{ fontSize: theme.fontSize.sm, fontWeight: '600', color: theme.colors.text }}>{formatCurrency(categoryAvgs.reduce((s, c) => addMoney(s, c.total), 0))}</Text>
                       </View>
                     )}
                   />
@@ -274,9 +276,9 @@ export default function SummaryScreen({ navigation }: any) {
             <Text style={styles.emptyText}>No investments in this period</Text>
           </View>
         );
-        const totalInvested = investmentTxns.reduce((s, t) => s + t.amount, 0);
+        const totalInvested = investmentTxns.reduce((s, t) => addMoney(s, t.amount), 0);
         const avgInvestment = totalInvested / investmentTxns.length;
-        const largest = Math.max(...investmentTxns.map(t => t.amount));
+        const largest = investmentTxns.reduce((largest, t) => Math.max(largest, t.amount), 0);
         return (
           <View key="investmentInsights" style={styles.section}>
             <Text style={styles.sectionTitle}>Investment Insights</Text>
@@ -325,8 +327,8 @@ export default function SummaryScreen({ navigation }: any) {
             {monthBudgets.map(b => {
               const bucket = state.buckets.find(bk => bk.id === b.bucketId);
               const spent = state.transactions
-                .filter(t => t.type === 'expense' && t.bucketId === b.bucketId && new Date(t.date).getMonth() + 1 === currentMonth && new Date(t.date).getFullYear() === currentYear)
-                .reduce((s, t) => s + t.amount, 0);
+                .filter(t => t.type === 'expense' && t.bucketId === b.bucketId && parseIsoDateLocal(t.date).getMonth() + 1 === currentMonth && parseIsoDateLocal(t.date).getFullYear() === currentYear)
+                .reduce((s, t) => addMoney(s, t.amount), 0);
               const pct = b.amount > 0 ? (spent / b.amount) * 100 : 0;
               const overBudget = pct > 100;
               return (
@@ -354,7 +356,7 @@ export default function SummaryScreen({ navigation }: any) {
         if (!isVisible('expenseBreakdown')) return null;
         const expensesByBucket = new Map<string, number>();
         filtered.filter(t => t.type === 'expense' && t.bucketId).forEach(t => {
-          expensesByBucket.set(t.bucketId!, (expensesByBucket.get(t.bucketId!) || 0) + t.amount);
+          expensesByBucket.set(t.bucketId!, addMoney((expensesByBucket.get(t.bucketId!) || 0), t.amount));
         });
         const sortedBuckets = Array.from(expensesByBucket.entries()).sort((a, b) => b[1] - a[1]);
         const totalExpenses = totals.expenses;
@@ -545,3 +547,5 @@ function createStyles(theme: any) {
     breakdownValue: { fontSize: theme.fontSize.sm, fontWeight: '600', color: theme.colors.text, width: 80, textAlign: 'right' },
   });
 }
+
+export default withFinancialErrorBoundary(SummaryScreen);

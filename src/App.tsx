@@ -3,8 +3,8 @@ import { useState, useEffect, useRef, Component, ReactNode, Suspense, lazy } fro
 import { useNavigate } from 'react-router-dom';
 import { AppState, Transaction, Bucket, RecurringTransaction, Budget, TransactionTemplate } from './types';
 import { generateId } from './utils/storage';
-import { backupApi, appStateApi, bucketsApi, transactionsApi, recurringApi, budgetsApi } from './utils/api';
-import { getNextOccurrence } from './utils/dateHelpers';
+import { backupApi, appStateApi, bucketsApi, transactionsApi, recurringApi, budgetsApi, RecurringEditPatch } from './utils/api';
+import { todayIsoLocal } from './utils/dateHelpers';
 import { useAuth } from './contexts/AuthContext';
 import BucketManager from './components/BucketManager';
 import TransactionForm from './components/TransactionForm';
@@ -80,6 +80,21 @@ function App() {
   userIdRef.current = user?.id;
   const stateRef = useRef(state);
   stateRef.current = state;
+  const accountLifetime = useRef({ id: user?.id, mounted: true });
+  if (accountLifetime.current.id !== user?.id) accountLifetime.current = { id: user?.id, mounted: true };
+  useEffect(() => {
+    const owner = accountLifetime.current;
+    owner.mounted = true;
+    return () => { owner.mounted = false; };
+  }, [user?.id]);
+  const readSequence = useRef(0);
+  const ownsAccount = (owner: typeof accountLifetime.current) => owner.mounted && accountLifetime.current === owner;
+  const showSaved = (owner: typeof accountLifetime.current, message: string) => {
+    if (!ownsAccount(owner)) return;
+    setActionStatus({ phase: 'success', message });
+    setTimeout(() => { if (ownsAccount(owner)) setActionStatus(current => current?.message === message ? null : current); }, 2000);
+  };
+
 
   // Load state from API on mount (only when user is authenticated)
   useEffect(() => {
@@ -88,20 +103,24 @@ function App() {
       return;
     }
 
+    const owner = accountLifetime.current;
+    const sequence = ++readSequence.current;
+    const active = () => ownsAccount(owner) && readSequence.current === sequence;
     const loadData = async () => {
       try {
         setLoading(true);
         setError(null);
         const data = await appStateApi.load();
-        setState(data);
+        if (active()) setState(data);
       } catch (err) {
+        if (!active()) return;
         const errorMessage = err instanceof Error ? err.message : 'Failed to load data';
         setError(errorMessage);
         console.error('Failed to load data:', err);
         // Don't block the UI - allow user to see the app even if API fails
         // They'll see the error message but can still interact
       } finally {
-        setLoading(false);
+        if (active()) setLoading(false);
       }
     };
     loadData();
@@ -123,6 +142,9 @@ function App() {
   useEffect(() => {
     if (loading || !user || !stateRef.current.recurringTransactions.length) return;
     let cancelled = false;
+    const sequence = readSequence.current;
+    const owner = accountLifetime.current;
+    const active = () => !cancelled && ownsAccount(owner) && readSequence.current === sequence;
     const process = async () => {
       try {
         const now = new Date();
@@ -130,9 +152,9 @@ function App() {
         const result = await recurringApi.process(today);
         if (result.available === false) return;
         const data = await appStateApi.load();
-        if (!cancelled) setState(data);
+        if (active()) setState(data);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Recurring entries could not be processed. Please retry later.');
+        if (active()) setError(err instanceof Error ? err.message : 'Recurring entries could not be processed. Please retry later.');
       }
     };
     void process();
@@ -140,16 +162,20 @@ function App() {
   }, [loading, visibilityTrigger, user]);
 
   const handleAddBucket = async (bucket: Bucket) => {
+    const owner = accountLifetime.current;
     try {
       setActionStatus({ phase: 'pending', message: 'Saving bucket...' });
       const newBucket = await bucketsApi.create(bucket);
+      if (!ownsAccount(owner)) return;
+      ++readSequence.current;
       setState((prev) => ({
         ...prev,
         buckets: [...prev.buckets, newBucket],
       }));
       setActionStatus({ phase: 'success', message: 'Bucket saved' });
-      setTimeout(() => setActionStatus(null), 2000);
+      setTimeout(() => { if (ownsAccount(owner)) setActionStatus(null); }, 2000);
     } catch (err) {
+      if (!ownsAccount(owner)) return;
       setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to create bucket');
       console.error('Failed to create bucket:', err);
@@ -157,16 +183,20 @@ function App() {
   };
 
   const handleUpdateBucket = async (id: string, updates: Partial<Bucket>) => {
+    const owner = accountLifetime.current;
     try {
       setActionStatus({ phase: 'pending', message: 'Updating bucket...' });
       const updatedBucket = await bucketsApi.update(id, updates);
+      if (!ownsAccount(owner)) return;
+      ++readSequence.current;
       setState((prev) => ({
         ...prev,
         buckets: prev.buckets.map((b) => (b.id === id ? updatedBucket : b)),
       }));
       setActionStatus({ phase: 'success', message: 'Bucket updated' });
-      setTimeout(() => setActionStatus(null), 2000);
+      setTimeout(() => { if (ownsAccount(owner)) setActionStatus(null); }, 2000);
     } catch (err) {
+      if (!ownsAccount(owner)) return;
       setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to update bucket');
       console.error('Failed to update bucket:', err);
@@ -174,16 +204,20 @@ function App() {
   };
 
   const handleDeleteBucket = async (id: string) => {
+    const owner = accountLifetime.current;
     try {
       setActionStatus({ phase: 'pending', message: 'Deleting bucket...' });
       await bucketsApi.delete(id);
+      if (!ownsAccount(owner)) return;
+      ++readSequence.current;
       setState((prev) => ({
         ...prev,
         buckets: prev.buckets.filter((b) => b.id !== id),
       }));
       setActionStatus({ phase: 'success', message: 'Bucket deleted' });
-      setTimeout(() => setActionStatus(null), 2000);
+      setTimeout(() => { if (ownsAccount(owner)) setActionStatus(null); }, 2000);
     } catch (err) {
+      if (!ownsAccount(owner)) return;
       setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to delete bucket');
       console.error('Failed to delete bucket:', err);
@@ -191,6 +225,7 @@ function App() {
   };
 
   const handleAddTransaction = async (transactionData: Omit<Transaction, 'id' | 'isRecurring' | 'recurringId'>) => {
+    const owner = accountLifetime.current;
     // Prevent adding expense transactions if no buckets exist
     if (transactionData.type === 'expense' && state.buckets.length === 0) {
       setError('Please create at least one bucket before adding expense transactions.');
@@ -209,6 +244,8 @@ function App() {
           isRecurring: editingTransaction.isRecurring,
           recurringId: editingTransaction.recurringId,
         });
+        if (!ownsAccount(owner)) return;
+        ++readSequence.current;
         setState((prev) => ({
           ...prev,
           transactions: prev.transactions.map((t) =>
@@ -223,14 +260,17 @@ function App() {
           id: generateId(),
           isRecurring: false,
         });
+        if (!ownsAccount(owner)) return;
+        ++readSequence.current;
         setState((prev) => ({
           ...prev,
           transactions: [...prev.transactions, newTransaction],
         }));
         setActionStatus({ phase: 'success', message: 'Transaction saved' });
       }
-      setTimeout(() => setActionStatus(null), 2000);
+      setTimeout(() => { if (ownsAccount(owner)) setActionStatus(null); }, 2000);
     } catch (err) {
+      if (!ownsAccount(owner)) return;
       setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to save transaction');
       console.error('Failed to save transaction:', err);
@@ -244,7 +284,7 @@ function App() {
       amount: transaction.amount,
       description: transaction.description,
       bucketId: transaction.bucketId,
-      date: new Date().toISOString().split('T')[0],
+      date: todayIsoLocal(),
       tags: transaction.tags,
       notes: transaction.notes,
     });
@@ -279,16 +319,20 @@ function App() {
   };
 
   const handleBulkDeleteTransactions = async (ids: string[]) => {
+    const owner = accountLifetime.current;
     try {
       setActionStatus({ phase: 'pending', message: 'Deleting transactions...' });
       await Promise.all(ids.map(id => transactionsApi.delete(id)));
+      if (!ownsAccount(owner)) return;
+      ++readSequence.current;
       setState((prev) => ({
         ...prev,
         transactions: prev.transactions.filter(t => !ids.includes(t.id)),
       }));
       setActionStatus({ phase: 'success', message: 'Transactions deleted' });
-      setTimeout(() => setActionStatus(null), 2000);
+      setTimeout(() => { if (ownsAccount(owner)) setActionStatus(null); }, 2000);
     } catch (err) {
+      if (!ownsAccount(owner)) return;
       setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to delete transactions');
       console.error('Failed to delete transactions:', err);
@@ -298,7 +342,7 @@ function App() {
   const handleUseTemplate = (template: TransactionTemplate) => {
     setEditingTransaction(null);
     // Templates always use system date by default when used
-    const systemDate = new Date().toISOString().split('T')[0];
+    const systemDate = todayIsoLocal();
     handleAddTransaction({
       type: template.type,
       amount: template.amount || 0,
@@ -311,31 +355,38 @@ function App() {
   };
 
   const handleImportData = async (backup: BackupData) => {
+    const owner = accountLifetime.current;
     if (!user) throw new Error('Sign in before restoring a backup.');
     await backupApi.restore(backup, user.id);
     // Do not generate new occurrences during restore; show the restored snapshot.
     try {
+      const sequence = ++readSequence.current;
       const restored = await appStateApi.load();
-      if (userIdRef.current !== user.id) return;
+      if (!ownsAccount(owner)) return;
+      if (readSequence.current !== sequence) throw new Error('Concurrent change while refreshing restored data');
       setState(restored);
       setError(null);
     } catch {
-      if (userIdRef.current !== user.id) return;
+      if (!ownsAccount(owner)) return;
       setError('Backup restored, but the refreshed data could not be loaded. Reload the app.');
     }
   };
 
   const handleDeleteTransaction = async (id: string) => {
+    const owner = accountLifetime.current;
     try {
       setActionStatus({ phase: 'pending', message: 'Deleting transaction...' });
       await transactionsApi.delete(id);
+      if (!ownsAccount(owner)) return;
+      ++readSequence.current;
       setState((prev) => ({
         ...prev,
         transactions: prev.transactions.filter((t) => t.id !== id),
       }));
       setActionStatus({ phase: 'success', message: 'Transaction deleted' });
-      setTimeout(() => setActionStatus(null), 2000);
+      setTimeout(() => { if (ownsAccount(owner)) setActionStatus(null); }, 2000);
     } catch (err) {
+      if (!ownsAccount(owner)) return;
       setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to delete transaction');
       console.error('Failed to delete transaction:', err);
@@ -358,165 +409,132 @@ function App() {
   };
 
   const handleAddRecurring = async (recurring: RecurringTransaction) => {
+    const owner = accountLifetime.current;
+    ++readSequence.current;
     try {
+      setError(null);
       setActionStatus({ phase: 'pending', message: 'Saving recurring...' });
-      const newRecurring = await recurringApi.create(recurring);
-      setState((prev) => ({
-        ...prev,
-        recurringTransactions: [...prev.recurringTransactions, newRecurring],
-      }));
-      setActionStatus({ phase: 'success', message: 'Recurring saved' });
-      setTimeout(() => setActionStatus(null), 2000);
+      const saved = await recurringApi.create(recurring);
+      if (!ownsAccount(owner)) throw new Error('Account changed. Please try again.');
+      ++readSequence.current;
+      setState(prev => ({ ...prev, recurringTransactions: [...prev.recurringTransactions.filter(r => r.id !== saved.id), saved] }));
+      showSaved(owner, 'Recurring saved');
     } catch (err) {
-      setActionStatus(null);
-      setError(err instanceof Error ? err.message : 'Failed to create recurring transaction');
-      console.error('Failed to create recurring transaction:', err);
+      if (ownsAccount(owner)) { setActionStatus(null); setError(err instanceof Error ? err.message : 'Failed to create recurring transaction'); }
+      throw err;
     }
   };
 
   const handleUpdateRecurring = async (
     id: string,
-    updates: Partial<RecurringTransaction>,
-    options?: { applyToGenerated?: 'all' | 'fromNext' }
+    updates: RecurringEditPatch,
+    options: { applyToGenerated: 'all' | 'fromNext'; requestId: string; today: string }
   ) => {
+    const owner = accountLifetime.current;
+    ++readSequence.current;
     try {
+      setError(null);
       setActionStatus({ phase: 'pending', message: 'Updating recurring...' });
-      const updatedRecurring = await recurringApi.update(id, updates);
-
-      let bulkUpdatedTransactions: Transaction[] | undefined;
-      if (options?.applyToGenerated) {
-        const today = new Date().toISOString().split('T')[0];
-        const normalizeIsoDate = (value: string | undefined): string | undefined => {
-          if (!value) return undefined;
-          const d = String(value).split('T')[0];
-          return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined;
-        };
-
-        const current = stateRef.current;
-        const existingDatesArr = current.transactions
-          .filter((t) => t.recurringId === id)
-          .map((t) => normalizeIsoDate(t.date))
-          .filter((d): d is string => Boolean(d));
-
-        const existingUpToTodaySorted = existingDatesArr
-          .filter((d) => d <= today)
-          .sort();
-        const latestExistingUpToToday =
-          existingUpToTodaySorted.length > 0
-            ? existingUpToTodaySorted[existingUpToTodaySorted.length - 1]
-            : undefined;
-
-        const effectiveLastApplied =
-          latestExistingUpToToday || normalizeIsoDate(updatedRecurring.lastApplied);
-
-        const nextDate =
-          effectiveLastApplied
-            ? getNextOccurrence(updatedRecurring.frequency, updatedRecurring.startDate, effectiveLastApplied)
-            : normalizeIsoDate(updatedRecurring.startDate) || today;
-
-        const fromDate = options.applyToGenerated === 'fromNext' ? nextDate : undefined;
-
-        const bulkResult = await transactionsApi.updateByRecurringId(
-          id,
-          {
-            type: updatedRecurring.transaction.type,
-            amount: updatedRecurring.transaction.amount,
-            description: updatedRecurring.transaction.description,
-            bucketId: updatedRecurring.transaction.bucketId,
-          },
-          fromDate ? { fromDate } : undefined
-        );
-
-        bulkUpdatedTransactions = bulkResult.transactions;
+      await recurringApi.edit(id, updates, { historyScope: options.applyToGenerated, requestId: options.requestId, today: options.today });
+      if (!ownsAccount(owner)) throw new Error('Account changed. Please try again.');
+      let loaded = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const sequence = ++readSequence.current;
+        const data = await appStateApi.load();
+        if (!ownsAccount(owner)) throw new Error('Account changed. Please try again.');
+        if (readSequence.current !== sequence) continue;
+        setState(data);
+        loaded = true;
+        break;
       }
-
-      setState((prev) => {
-        const updatedById = bulkUpdatedTransactions
-          ? new Map(bulkUpdatedTransactions.map((t) => [t.id, t]))
-          : null;
-
-        return {
-          ...prev,
-          recurringTransactions: prev.recurringTransactions.map((r) =>
-            r.id === id ? updatedRecurring : r
-          ),
-          transactions: updatedById
-            ? prev.transactions.map((t) => updatedById.get(t.id) ?? t)
-            : prev.transactions,
-        };
-      });
-      setActionStatus({ phase: 'success', message: 'Recurring updated' });
-      setTimeout(() => setActionStatus(null), 2000);
+      if (!loaded) throw new Error('Data changed while refreshing. Your save may be complete; retry this draft to confirm it.');
+      showSaved(owner, 'Recurring updated');
     } catch (err) {
-      setActionStatus(null);
-      setError(err instanceof Error ? err.message : 'Failed to update recurring transaction');
-      console.error('Failed to update recurring transaction:', err);
+      if (ownsAccount(owner)) { setActionStatus(null); setError(err instanceof Error ? err.message : 'Save could not be confirmed. Retry this draft to confirm the result.'); }
+      throw err;
     }
   };
 
   const handleDeleteRecurring = async (id: string) => {
+    const owner = accountLifetime.current;
     try {
       setActionStatus({ phase: 'pending', message: 'Deleting recurring...' });
       await recurringApi.delete(id);
+      if (!ownsAccount(owner)) return;
+      ++readSequence.current;
       setState((prev) => ({
         ...prev,
         recurringTransactions: prev.recurringTransactions.filter((r) => r.id !== id),
         transactions: prev.transactions.filter((t) => t.recurringId !== id),
       }));
       setActionStatus({ phase: 'success', message: 'Recurring deleted' });
-      setTimeout(() => setActionStatus(null), 2000);
+      setTimeout(() => { if (ownsAccount(owner)) setActionStatus(null); }, 2000);
     } catch (err) {
+      if (!ownsAccount(owner)) return;
       setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to delete recurring transaction');
       console.error('Failed to delete recurring transaction:', err);
     }
   };
 
-  const handleAddBudget = async (budget: Budget) => {
+  const handleAddBudgets = async (budgets: Budget[], requestId: string) => {
+    const owner = accountLifetime.current;
+    ++readSequence.current;
     try {
-      setActionStatus({ phase: 'pending', message: 'Saving budget...' });
-      const newBudget = await budgetsApi.create(budget);
-      setState((prev) => ({
-        ...prev,
-        budgets: [...prev.budgets, newBudget],
-      }));
-      setActionStatus({ phase: 'success', message: 'Budget saved' });
-      setTimeout(() => setActionStatus(null), 2000);
+      setError(null);
+      setActionStatus({ phase: 'pending', message: 'Saving budgets...' });
+      await budgetsApi.createBatch(budgets, requestId);
+      if (!ownsAccount(owner)) throw new Error('Account changed. Please try again.');
+      let loaded = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const sequence = ++readSequence.current;
+        const data = await appStateApi.load();
+        if (!ownsAccount(owner)) throw new Error('Account changed. Please try again.');
+        if (readSequence.current !== sequence) continue;
+        setState(data);
+        loaded = true;
+        break;
+      }
+      if (!loaded) throw new Error('Data changed while refreshing. Your save may be complete; retry this draft to confirm it.');
+      showSaved(owner, 'Budgets saved');
     } catch (err) {
-      setActionStatus(null);
-      setError(err instanceof Error ? err.message : 'Failed to create budget');
-      console.error('Failed to create budget:', err);
+      if (ownsAccount(owner)) { setActionStatus(null); setError(err instanceof Error ? err.message : 'Save could not be confirmed. Retry this draft to confirm the result.'); }
+      throw err;
     }
   };
 
   const handleUpdateBudget = async (id: string, updates: Partial<Budget>) => {
+    const owner = accountLifetime.current;
+    ++readSequence.current;
     try {
+      setError(null);
       setActionStatus({ phase: 'pending', message: 'Updating budget...' });
       const updatedBudget = await budgetsApi.update(id, updates);
-      setState((prev) => ({
-        ...prev,
-        budgets: prev.budgets.map((b) => (b.id === id ? updatedBudget : b)),
-      }));
-      setActionStatus({ phase: 'success', message: 'Budget updated' });
-      setTimeout(() => setActionStatus(null), 2000);
+      if (!ownsAccount(owner)) throw new Error('Account changed. Please try again.');
+      ++readSequence.current;
+      setState(prev => ({ ...prev, budgets: prev.budgets.map(b => b.id === id ? updatedBudget : b) }));
+      showSaved(owner, 'Budget updated');
     } catch (err) {
-      setActionStatus(null);
-      setError(err instanceof Error ? err.message : 'Failed to update budget');
-      console.error('Failed to update budget:', err);
+      if (ownsAccount(owner)) { setActionStatus(null); setError(err instanceof Error ? err.message : 'Failed to update budget'); }
+      throw err;
     }
   };
 
   const handleDeleteBudget = async (id: string) => {
+    const owner = accountLifetime.current;
     try {
       setActionStatus({ phase: 'pending', message: 'Deleting budget...' });
       await budgetsApi.delete(id);
+      if (!ownsAccount(owner)) return;
+      ++readSequence.current;
       setState((prev) => ({
         ...prev,
         budgets: prev.budgets.filter((b) => b.id !== id),
       }));
       setActionStatus({ phase: 'success', message: 'Budget deleted' });
-      setTimeout(() => setActionStatus(null), 2000);
+      setTimeout(() => { if (ownsAccount(owner)) setActionStatus(null); }, 2000);
     } catch (err) {
+      if (!ownsAccount(owner)) return;
       setActionStatus(null);
       setError(err instanceof Error ? err.message : 'Failed to delete budget');
       console.error('Failed to delete budget:', err);
@@ -636,6 +654,7 @@ function App() {
       </header>
 
       <main className="app-main">
+        <ErrorBoundary key={`${user?.id}:${activeTab}`}>
         {activeTab === 'summary' && (
           <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading summary...</div>}>
             <Summary transactions={state.transactions} buckets={state.buckets} budgets={state.budgets} />
@@ -740,6 +759,7 @@ function App() {
                 recurringTransactions={state.recurringTransactions || []}
                 buckets={state.buckets || []}
                 transactions={state.transactions || []}
+                key={user?.id}
                 onAdd={handleAddRecurring}
                 onUpdate={handleUpdateRecurring}
                 onDelete={handleDeleteRecurring}
@@ -753,12 +773,14 @@ function App() {
             <BudgetManager
               budgets={state.budgets}
               buckets={state.buckets}
-              onAdd={handleAddBudget}
+              key={user?.id}
+              onAdd={handleAddBudgets}
               onUpdate={handleUpdateBudget}
               onDelete={handleDeleteBudget}
             />
           </Suspense>
         )}
+        </ErrorBoundary>
       </main>
     </div>
   );

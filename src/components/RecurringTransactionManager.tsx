@@ -1,18 +1,22 @@
 import { useState, useMemo } from 'react';
 import { RecurringTransaction, Bucket, RecurringFrequency, Transaction } from '../types';
-import { getNextOccurrence, formatDate } from '../utils/dateHelpers';
+import { parseIsoDateLocal, todayIsoLocal, formatIsoDateLocal, getNextOccurrence, formatDate } from '../utils/dateHelpers';
 import TransactionForm from './TransactionForm';
+import { useMutationAttempt } from '../utils/mutationAttempt';
+import { generateId } from '../utils/storage';
+import { RecurringEditPatch } from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface RecurringTransactionManagerProps {
   recurringTransactions: RecurringTransaction[];
   buckets: Bucket[];
   transactions: Transaction[];
-  onAdd: (recurring: RecurringTransaction) => void;
+  onAdd: (recurring: RecurringTransaction) => Promise<void>;
   onUpdate: (
     id: string,
-    recurring: Partial<RecurringTransaction>,
-    options?: { applyToGenerated?: 'all' | 'fromNext' }
-  ) => void;
+    recurring: RecurringEditPatch,
+    options: { applyToGenerated: 'all' | 'fromNext'; requestId: string; today: string }
+  ) => Promise<void>;
   onDelete: (id: string) => void;
 }
 
@@ -28,27 +32,27 @@ export default function RecurringTransactionManager({
   const recurringStatus = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = formatIsoDateLocal(today);
 
     return recurringTransactions.map((recurring) => {
       const generatedTransactions = transactions.filter(
         (t) => t.recurringId === recurring.id
       );
       const lastGenerated = generatedTransactions.length > 0
-        ? generatedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date
+        ? generatedTransactions.sort((a, b) => parseIsoDateLocal(b.date).getTime() - parseIsoDateLocal(a.date).getTime())[0].date
         : null;
       
       // Calculate status based on dates
-      const startDate = new Date(recurring.startDate);
+      const startDate = parseIsoDateLocal(recurring.startDate);
       startDate.setHours(0, 0, 0, 0);
-      const startDateStr = startDate.toISOString().split('T')[0];
+      const startDateStr = formatIsoDateLocal(startDate);
       
       let status: 'active' | 'inactive' | 'closed' = 'inactive';
       
       if (recurring.endDate) {
-        const endDate = new Date(recurring.endDate);
+        const endDate = parseIsoDateLocal(recurring.endDate);
         endDate.setHours(0, 0, 0, 0);
-        const endDateStr = endDate.toISOString().split('T')[0];
+        const endDateStr = formatIsoDateLocal(endDate);
         
         if (todayStr >= startDateStr && todayStr <= endDateStr) {
           status = 'active';
@@ -83,74 +87,61 @@ export default function RecurringTransactionManager({
       };
     });
   }, [recurringTransactions, transactions]);
+  const { user } = useAuth();
+  const save = useMutationAttempt<RecurringTransaction>(user?.id || '');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<Transaction>>({});
   const [frequency, setFrequency] = useState<RecurringFrequency>('monthly');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(todayIsoLocal());
   const [endDate, setEndDate] = useState('');
   const [pendingEditUpdate, setPendingEditUpdate] = useState<{
     id: string;
-    updates: Partial<RecurringTransaction>;
+    updates: RecurringEditPatch;
   } | null>(null);
 
-  const handleSubmit = (transactionData: Omit<Transaction, 'id' | 'isRecurring' | 'recurringId' | 'date'>) => {
+  const handleSubmit = async (transactionData: Omit<Transaction, 'id' | 'isRecurring' | 'recurringId' | 'date'>) => {
+    if (save.pending) return;
+    const updates = { transaction: transactionData, frequency, startDate, endDate: endDate || null };
     if (editingId) {
-      setPendingEditUpdate({
-        id: editingId,
-        updates: {
-          transaction: transactionData,
-          frequency,
-          startDate,
-          endDate: endDate || undefined,
-        },
-      });
-    } else {
-      onAdd({
-        id: Date.now().toString(),
-        transaction: transactionData,
-        frequency,
-        startDate,
-        endDate: endDate || undefined,
-      });
+      setPendingEditUpdate({ id: editingId, updates });
+      return;
     }
-
-    setShowForm(false);
-    setFormData({});
-    setFrequency('monthly');
-    setStartDate(new Date().toISOString().split('T')[0]);
-    setEndDate('');
+    await save.run(JSON.stringify(updates), () => ({ ...updates, id: generateId(), endDate: endDate || undefined }),
+      async attempt => { await onAdd(attempt.payload); }, handleCancel);
   };
 
-  const applyPendingUpdate = (mode: 'all' | 'fromNext') => {
-    if (!pendingEditUpdate) return;
-    onUpdate(pendingEditUpdate.id, pendingEditUpdate.updates, { applyToGenerated: mode });
-    setPendingEditUpdate(null);
-    setEditingId(null);
-    setShowForm(false);
-    setFormData({});
-    setFrequency('monthly');
-    setStartDate(new Date().toISOString().split('T')[0]);
-    setEndDate('');
+  const applyPendingUpdate = async (mode: 'all' | 'fromNext') => {
+    if (!pendingEditUpdate || save.pending) return;
+    await save.run(JSON.stringify({ ...pendingEditUpdate, mode }),
+      () => ({ ...pendingEditUpdate.updates, id: pendingEditUpdate.id, endDate: pendingEditUpdate.updates.endDate || undefined } as RecurringTransaction),
+      async attempt => {
+        const { transaction, frequency, startDate, endDate } = attempt.payload;
+        await onUpdate(pendingEditUpdate.id, { transaction, frequency, startDate, endDate: endDate || null },
+          { applyToGenerated: mode, requestId: attempt.requestId, today: attempt.today });
+      }, handleCancel);
   };
 
   const handleEdit = (recurring: RecurringTransaction) => {
+    if (save.pending) return;
+    save.clear();
     setEditingId(recurring.id);
     setFormData(recurring.transaction);
     setFrequency(recurring.frequency);
-    setStartDate(recurring.startDate ? recurring.startDate.split('T')[0] : new Date().toISOString().split('T')[0]);
+    setStartDate(recurring.startDate ? recurring.startDate.split('T')[0] : todayIsoLocal());
     setEndDate(recurring.endDate ? recurring.endDate.split('T')[0] : '');
     setPendingEditUpdate(null);
     setShowForm(true);
   };
 
   const handleCancel = () => {
+    save.clear();
     setShowForm(false);
     setEditingId(null);
     setPendingEditUpdate(null);
     setFormData({});
     setFrequency('monthly');
-    setStartDate(new Date().toISOString().split('T')[0]);
+    setStartDate(todayIsoLocal());
     setEndDate('');
   };
 
@@ -167,6 +158,7 @@ export default function RecurringTransactionManager({
 
       {showForm && (
         <div className="recurring-form-container">
+          <fieldset disabled={save.pending} style={{ border: 0, margin: 0, padding: 0 }}>
           <TransactionForm
             buckets={buckets}
             transactions={transactions}
@@ -209,9 +201,12 @@ export default function RecurringTransactionManager({
               />
             </div>
           </div>
+          </fieldset>
         </div>
       )}
 
+      {save.error && <p role="alert" style={{ color: 'var(--danger-color)' }}>{save.error}</p>}
+      {save.pending && <p role="status">Saving…</p>}
       {pendingEditUpdate && (
         <div
           style={{
@@ -239,6 +234,7 @@ export default function RecurringTransactionManager({
               boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
             }}
           >
+            {save.error && <p role="alert" style={{ color: 'var(--danger-color)' }}>{save.error}</p>}
             <h3 style={{ marginTop: 0 }}>Apply changes to generated transactions?</h3>
             <p style={{ marginTop: 0, color: 'var(--text-muted)' }}>
               You changed this recurring template. Choose whether to update transactions that were already generated.
@@ -246,12 +242,14 @@ export default function RecurringTransactionManager({
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <button
                 className="btn btn-secondary"
+                disabled={save.pending}
                 onClick={() => setPendingEditUpdate(null)}
               >
                 Back
               </button>
               <button
                 className="btn btn-secondary"
+                disabled={save.pending}
                 onClick={() => applyPendingUpdate('fromNext')}
                 title="Keep past transactions unchanged"
               >
@@ -259,6 +257,7 @@ export default function RecurringTransactionManager({
               </button>
               <button
                 className="btn btn-primary"
+                disabled={save.pending}
                 onClick={() => applyPendingUpdate('all')}
                 title="Update all transactions already generated for this recurring item"
               >

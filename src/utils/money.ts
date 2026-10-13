@@ -20,3 +20,42 @@ export function getMoneyInputError(input: string, touched = false, optional = fa
     ? 'Amount must be less than 10 billion.'
     : 'Use 0.01 or more, with up to 2 decimal places.';
 }
+
+/** Aggregate cap preserves cent precision when exposed as legacy dollar numbers. */
+export const MAX_TOTAL_CENTS = 99999999999999;
+
+/** Convert valid signed, cent-denominated money without accepting extra precision. */
+export function moneyToCents(amount: number): number {
+  if (!Number.isFinite(amount)) throw new RangeError('Money must be finite.');
+  const scaled = amount * 100;
+  const cents = Math.round(scaled);
+  // Binary representations of decimal cents have tiny multiplication noise.
+  if (!Number.isSafeInteger(cents) || Math.abs(cents) > MAX_TOTAL_CENTS ||
+      cents / 100 !== amount) {
+    throw new RangeError('Money must have at most two decimal places and remain within the supported total.');
+  }
+  return cents;
+}
+
+export function centsToMoney(cents: number): number {
+  if (!Number.isSafeInteger(cents) || Math.abs(cents) > MAX_TOTAL_CENTS) {
+    throw new RangeError('Total exceeds the supported money range.');
+  }
+  return cents / 100;
+}
+
+/** All additions happen in checked integer cents; dollar models remain compatible. */
+export function addMoney(...amounts: number[]): number {
+  let cents = 0;
+  for (const amount of amounts) {
+    cents += moneyToCents(amount);
+    if (!Number.isSafeInteger(cents) || Math.abs(cents) > MAX_TOTAL_CENTS) {
+      throw new RangeError('Total exceeds the supported money range.');
+    }
+  }
+  return centsToMoney(cents);
+}
+
+export function subtractMoney(amount: number, ...deductions: number[]): number {
+  return addMoney(amount, ...deductions.map(value => -value));
+}

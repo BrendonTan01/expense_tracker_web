@@ -1,4 +1,5 @@
-import { parseMoneyInput, getMoneyInputError } from '../utils/money';
+import { withFinancialErrorBoundary } from '../components/FinancialErrorBoundary';
+import { addMoney, parseMoneyInput, getMoneyInputError } from '../utils/money';
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity, TextInput,
@@ -6,14 +7,24 @@ import {
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
-import { formatCurrency } from '../utils/dateHelpers';
+import { parseIsoDateLocal, formatCurrency } from '../utils/dateHelpers';
 import { generateId } from '../utils/storage';
 import { hapticSelection } from '../utils/haptics';
 import { Budget } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { useMutationAttempt } from '../utils/mutationAttempt';
 
-export default function BudgetsScreen() {
+function BudgetsScreen() {
+  const { user } = useAuth();
+  return <AccountBudgetsScreen key={user?.id || 'signed-out'} />;
+}
+
+function AccountBudgetsScreen() {
   const { theme } = useTheme();
-  const { state, addBudget, updateBudget, deleteBudget } = useAppState();
+  const { state, addBudgets, updateBudget, deleteBudget } = useAppState();
+  const { user } = useAuth();
+  const save = useMutationAttempt<Budget[]>(user?.id || '');
+  const [formError, setFormError] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [selectedBucketId, setSelectedBucketId] = useState('');
@@ -47,6 +58,9 @@ export default function BudgetsScreen() {
   }, [state.budgets, state.buckets]);
 
   const openAdd = () => {
+    if (save.pending) return;
+    save.clear();
+    setFormError(null);
     setEditingBudget(null);
     setSelectedBucketId(state.buckets[0]?.id || '');
     setAmountTouched(false);
@@ -59,6 +73,9 @@ export default function BudgetsScreen() {
   };
 
   const openEdit = (budget: Budget) => {
+    if (save.pending) return;
+    save.clear();
+    setFormError(null);
     setEditingBudget(budget);
     setSelectedBucketId(budget.bucketId);
     setAmountTouched(false);
@@ -69,40 +86,25 @@ export default function BudgetsScreen() {
     setModalVisible(true);
   };
 
+  const close = () => { if (!save.pending) { save.clear(); setModalVisible(false); } };
   const handleSave = async () => {
+    if (save.pending) return;
     setAmountTouched(true);
+    setFormError(null);
     const numAmount = parseMoneyInput(amount);
     if (numAmount === null) return;
-    if (!selectedBucketId) { Alert.alert('Error', 'Please select a bucket'); return; }
-
-    try {
-      if (editingBudget) {
-        await updateBudget(editingBudget.id, { amount: numAmount });
-      } else if (period === 'monthly' && applyAllMonths) {
-        for (let m = 1; m <= 12; m++) {
-          await addBudget({
-            id: generateId(),
-            bucketId: selectedBucketId,
-            amount: numAmount,
-            period: 'monthly',
-            year,
-            month: m,
-          });
-        }
-      } else {
-        await addBudget({
-          id: generateId(),
-          bucketId: selectedBucketId,
-          amount: numAmount,
-          period,
-          year,
-          month: period === 'monthly' ? month : undefined,
-        });
-      }
-      setModalVisible(false);
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    if (!selectedBucketId) { setFormError('Please select a bucket'); return; }
+    if (!Number.isInteger(year) || year < 1 || year > 9999 ||
+        (period === 'monthly' && (!Number.isInteger(month) || month < 1 || month > 12))) {
+      setFormError('Enter a whole year from 1 to 9999 and a valid month.'); return;
     }
+    const months = period === 'monthly' ? (!editingBudget && applyAllMonths ? Array.from({ length: 12 }, (_, i) => i + 1) : [month]) : [undefined];
+    await save.run(JSON.stringify({ editingId: editingBudget?.id, selectedBucketId, numAmount, period, year, months }),
+      () => months.map(m => ({ id: editingBudget?.id || generateId(), bucketId: selectedBucketId, amount: numAmount, period, year, month: m })),
+      async attempt => {
+        if (editingBudget) await updateBudget(editingBudget.id, { amount: numAmount });
+        else await addBudgets(attempt.payload, attempt.requestId);
+      }, () => setModalVisible(false));
   };
 
   const handleDelete = (budget: Budget) => {
@@ -116,11 +118,11 @@ export default function BudgetsScreen() {
   const getSpent = (bucketId: string, budgetPeriod: 'monthly' | 'yearly', budgetYear: number, budgetMonth?: number) => {
     return state.transactions.filter(t => {
       if (t.type !== 'expense' || t.bucketId !== bucketId) return false;
-      const d = new Date(t.date);
+      const d = parseIsoDateLocal(t.date);
       if (d.getFullYear() !== budgetYear) return false;
       if (budgetPeriod === 'monthly' && budgetMonth && d.getMonth() + 1 !== budgetMonth) return false;
       return true;
-    }).reduce((s, t) => s + t.amount, 0);
+    }).reduce((s, t) => addMoney(s, t.amount), 0);
   };
 
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -173,10 +175,10 @@ export default function BudgetsScreen() {
         }
       />
 
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={close}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView>
-            <View style={styles.modalContent}>
+            <View style={styles.modalContent} pointerEvents={save.pending ? 'none' : 'auto'}>
               <Text style={styles.modalTitle}>{editingBudget ? 'Edit Budget' : 'New Budget'}</Text>
 
               {!editingBudget && (
@@ -234,12 +236,13 @@ export default function BudgetsScreen() {
                 </>
               )}
 
+              {(formError || save.error) && <Text style={styles.fieldError} accessibilityLiveRegion="polite">{formError || save.error}</Text>}
               <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => { hapticSelection(); setModalVisible(false); }}>
+                <TouchableOpacity style={styles.cancelBtn} disabled={save.pending} onPress={close}>
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.saveBtn} onPress={() => { hapticSelection(); handleSave(); }}>
-                  <Text style={styles.saveBtnText}>Save</Text>
+                <TouchableOpacity style={styles.saveBtn} disabled={save.pending} onPress={() => { hapticSelection(); handleSave(); }}>
+                  <Text style={styles.saveBtnText}>{save.pending ? 'Saving…' : 'Save'}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -300,3 +303,5 @@ function createStyles(theme: any) {
     saveBtnText: { color: '#fff', fontSize: theme.fontSize.md, fontWeight: '600' },
   });
 }
+
+export default withFinancialErrorBoundary(BudgetsScreen);

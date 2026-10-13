@@ -135,8 +135,10 @@ function reflectionScreen(api) {
     '../contexts/ThemeContext': { useTheme: () => ({ theme: { colors: {}, fontSize: {}, spacing: {}, borderRadius: {} } }) },
     '../contexts/AppStateContext': { useAppState: () => ({ state: { transactions: [] } }) },
     '../utils/reflections': load('mobile/src/utils/reflections.ts'),
+    '../components/FinancialErrorBoundary': { withFinancialErrorBoundary: screen => screen },
+    '../utils/money': load('mobile/src/utils/money.ts'),
     '../utils/api': { summariesApi: api }, '../utils/haptics': { hapticSelection() {} },
-    '../utils/storage': { generateId: () => 'new-reflection' }, '../utils/dateHelpers': { formatCurrency: String },
+    '../utils/storage': { generateId: () => 'new-reflection' }, '../utils/dateHelpers': load('mobile/src/utils/dateHelpers.ts'),
   };
   const screen = load('mobile/src/screens/ReflectionsScreen.tsx', mocks).default;
   return { host, alerts, render() { const outer = screen(); return host.render(() => outer.type(outer.props)); } };

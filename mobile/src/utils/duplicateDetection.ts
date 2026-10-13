@@ -1,3 +1,5 @@
+import { calendarDayNumber } from './dateHelpers';
+import { moneyToCents } from './money';
 import { Transaction } from '../types';
 
 export interface DuplicateCheckResult {
@@ -11,14 +13,16 @@ export function checkForDuplicates(
   existingTransactions: Transaction[],
   timeWindowHours: number = 24
 ): DuplicateCheckResult {
-  const newDate = new Date(newTransaction.date);
+  const newDay = calendarDayNumber(newTransaction.date);
   const timeWindowMs = timeWindowHours * 60 * 60 * 1000;
   const similarTransactions = existingTransactions.filter(t => {
-    const amountMatch = Math.abs(t.amount - newTransaction.amount) < 0.01;
+    let amountMatch = false;
+    try { amountMatch = moneyToCents(t.amount) === moneyToCents(newTransaction.amount); }
+    catch { return false; } // Invalid historical money cannot establish a duplicate.
     const descMatch = t.description.toLowerCase().includes(newTransaction.description.toLowerCase()) ||
                      newTransaction.description.toLowerCase().includes(t.description.toLowerCase());
-    const transactionDate = new Date(t.date);
-    const timeDiff = Math.abs(newDate.getTime() - transactionDate.getTime());
+    const transactionDay = calendarDayNumber(t.date);
+    const timeDiff = Math.abs(newDay - transactionDay) * 86400000;
     const dateMatch = timeDiff <= timeWindowMs;
     const typeMatch = t.type === newTransaction.type;
     const bucketMatch = !newTransaction.bucketId || !t.bucketId || newTransaction.bucketId === t.bucketId;

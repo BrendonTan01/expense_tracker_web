@@ -11,6 +11,9 @@ import { formatCurrency, formatDate, todayIsoLocal, parseIsoDateLocal, formatIso
 import { generateId } from '../utils/storage';
 import { hapticSelection } from '../utils/haptics';
 import { RecurringTransaction, RecurringFrequency } from '../types';
+import { RecurringEditPatch } from '../utils/api';
+import { useMutationAttempt } from '../utils/mutationAttempt';
+import { useAuth } from '../contexts/AuthContext';
 
 const FREQUENCIES: { key: RecurringFrequency; label: string }[] = [
   { key: 'daily', label: 'Daily' },
@@ -28,8 +31,16 @@ function getStatus(r: RecurringTransaction): 'active' | 'inactive' | 'closed' {
 }
 
 export default function RecurringScreen() {
+  const { user } = useAuth();
+  return <AccountRecurringScreen key={user?.id || 'signed-out'} />;
+}
+
+function AccountRecurringScreen() {
   const { theme } = useTheme();
   const { state, addRecurring, updateRecurring, deleteRecurring } = useAppState();
+  const { user } = useAuth();
+  const save = useMutationAttempt<RecurringTransaction>(user?.id || '');
+  const [formError, setFormError] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState<RecurringTransaction | null>(null);
 
@@ -48,6 +59,9 @@ export default function RecurringScreen() {
   const [showEndPicker, setShowEndPicker] = useState(false);
 
   const openAdd = () => {
+    if (save.pending) return;
+    save.clear();
+    setFormError(null);
     setEditing(null);
     setType('expense');
     setAmountTouched(false);
@@ -62,6 +76,9 @@ export default function RecurringScreen() {
   };
 
   const openEdit = (r: RecurringTransaction) => {
+    if (save.pending) return;
+    save.clear();
+    setFormError(null);
     setEditing(r);
     setType(r.transaction.type);
     setAmountTouched(false);
@@ -75,32 +92,28 @@ export default function RecurringScreen() {
     setModalVisible(true);
   };
 
+  const close = () => { if (!save.pending) { save.clear(); setModalVisible(false); } };
   const handleSave = async () => {
+    if (save.pending) return;
     setAmountTouched(true);
+    setFormError(null);
     const numAmount = parseMoneyInput(amount);
     if (numAmount === null) return;
-    if (!description.trim()) { Alert.alert('Error', 'Enter a description'); return; }
-    if (type === 'expense' && !bucketId) { Alert.alert('Error', 'Select a bucket'); return; }
-
-    try {
-      const data: RecurringTransaction = {
-        id: editing?.id || generateId(),
-        transaction: { type, amount: numAmount, description: description.trim(), bucketId: type === 'expense' ? bucketId : undefined },
-        frequency,
-        startDate,
-        endDate: hasEndDate ? endDate : undefined,
-        lastApplied: editing?.lastApplied,
-      };
-
+    if (!description.trim()) { setFormError('Enter a description'); return; }
+    if (type === 'expense' && !bucketId) { setFormError('Select a bucket'); return; }
+    if (hasEndDate && (!endDate || endDate < startDate)) { setFormError('Select an end date on or after the start date'); return; }
+    const draft = {
+      transaction: { type, amount: numAmount, description: description.trim(), bucketId: type === 'expense' ? bucketId : undefined },
+      frequency, startDate, endDate: hasEndDate ? endDate : undefined,
+    };
+    await save.run(JSON.stringify({ id: editing?.id, ...draft }), () => ({ id: editing?.id || generateId(), ...draft }), async attempt => {
       if (editing) {
-        await updateRecurring(editing.id, data);
-      } else {
-        await addRecurring(data);
-      }
-      setModalVisible(false);
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
-    }
+        const { transaction, frequency, startDate, endDate } = attempt.payload;
+        const patch: RecurringEditPatch = { transaction, frequency, startDate, endDate: endDate || null };
+        // Omitting lastApplied keeps schedule progress; clearing endDate is explicit.
+        await updateRecurring(editing.id, patch, attempt.requestId, attempt.today);
+      } else await addRecurring(attempt.payload);
+    }, () => setModalVisible(false));
   };
 
   const handleDelete = (r: RecurringTransaction) => {
@@ -168,10 +181,10 @@ export default function RecurringScreen() {
         }
       />
 
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={close}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView>
-            <View style={styles.modalContent}>
+            <View style={styles.modalContent} pointerEvents={save.pending ? 'none' : 'auto'}>
               <Text style={styles.modalTitle}>{editing ? 'Edit Recurring' : 'New Recurring'}</Text>
 
               {/* Type */}
@@ -225,7 +238,7 @@ export default function RecurringScreen() {
                   <Text style={styles.dateBtnText}>{formatDate(startDate)}</Text>
                 </TouchableOpacity>
                 {showStartPicker && (
-                  <DateTimePicker value={parseIsoDateLocal(startDate)} mode="date" display={Platform.OS === 'ios' ? 'inline' : 'default'} onChange={(_, d) => { setShowStartPicker(Platform.OS === 'ios'); if (d) setStartDate(formatIsoDateLocal(d)); }} themeVariant={theme.isDark ? 'dark' : 'light'} />
+                  <DateTimePicker value={parseIsoDateLocal(startDate)} mode="date" display={Platform.OS === 'ios' ? 'inline' : 'default'} onValueChange={(_, d) => { setShowStartPicker(Platform.OS === 'ios'); setStartDate(formatIsoDateLocal(d)); }} onDismiss={() => setShowStartPicker(false)} themeVariant={theme.isDark ? 'dark' : 'light'} />
                 )}
               </View>
 
@@ -241,17 +254,18 @@ export default function RecurringScreen() {
                     <Text style={styles.dateBtnText}>{endDate ? formatDate(endDate) : 'Select date'}</Text>
                   </TouchableOpacity>
                   {showEndPicker && (
-                    <DateTimePicker value={endDate ? parseIsoDateLocal(endDate) : new Date()} mode="date" display={Platform.OS === 'ios' ? 'inline' : 'default'} onChange={(_, d) => { setShowEndPicker(Platform.OS === 'ios'); if (d) setEndDate(formatIsoDateLocal(d)); }} themeVariant={theme.isDark ? 'dark' : 'light'} />
+                    <DateTimePicker value={endDate ? parseIsoDateLocal(endDate) : new Date()} mode="date" display={Platform.OS === 'ios' ? 'inline' : 'default'} onValueChange={(_, d) => { setShowEndPicker(Platform.OS === 'ios'); setEndDate(formatIsoDateLocal(d)); }} onDismiss={() => setShowEndPicker(false)} themeVariant={theme.isDark ? 'dark' : 'light'} />
                   )}
                 </View>
               )}
 
+              {(formError || save.error) && <Text style={styles.fieldError} accessibilityLiveRegion="polite">{formError || save.error}</Text>}
               <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => { hapticSelection(); setModalVisible(false); }}>
+                <TouchableOpacity style={styles.cancelBtn} disabled={save.pending} onPress={close}>
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.saveBtn} onPress={() => { hapticSelection(); handleSave(); }}>
-                  <Text style={styles.saveBtnText}>Save</Text>
+                <TouchableOpacity style={styles.saveBtn} disabled={save.pending} onPress={() => { hapticSelection(); handleSave(); }}>
+                  <Text style={styles.saveBtnText}>{save.pending ? 'Saving…' : 'Save'}</Text>
                 </TouchableOpacity>
               </View>
             </View>

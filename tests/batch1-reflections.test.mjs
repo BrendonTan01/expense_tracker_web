@@ -5,6 +5,8 @@ import ts from 'typescript';
 
 const importTS = async source => import('data:text/javascript;base64,' + Buffer.from(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React } }).outputText).toString('base64'));
 const helpers = await importTS(readFileSync('mobile/src/utils/reflections.ts', 'utf8'));
+const money = await importTS(readFileSync('mobile/src/utils/money.ts', 'utf8'));
+const dates = await importTS(readFileSync('mobile/src/utils/dateHelpers.ts', 'utf8'));
 test('period drafts preserve an intentionally empty reflection and remain isolated', () => {
   const month = helpers.reflectionKey(2026, 10), year = helpers.reflectionKey(2026);
   const drafts = { [month]: '' };
@@ -68,13 +70,14 @@ test('real reflection screen saves cleared text and retains scoped month and yea
   const host = hookHost(), calls = [];
   const monthly = [{ id: 'month-id', year: 2026, month: 1, summary: 'Monthly saved' }];
   const yearly = [{ id: 'year-id', year: 2026, summary: 'Year saved' }];
-  globalThis.reflectionHarness = { ...host, helpers, api: {
+  globalThis.reflectionHarness = { ...host, helpers, money, dates, api: {
     getMonthly: async () => monthly, getYearly: async () => yearly,
     update: async (id, summary, type) => { calls.push({ id, summary, type }); return { ...(type === 'monthly' ? monthly[0] : yearly[0]), summary }; },
     create: async value => { calls.push(value); return value; },
   } };
   let source = readFileSync('mobile/src/screens/ReflectionsScreen.tsx', 'utf8').replace(/import[\s\S]*?from ['"][^'"]+['"];\n/g, '');
-  source = `const { react: React, useState, useEffect, useMemo, useRef, helpers: {reflectionKey, reflectionText, reflectionYears}, api: summariesApi } = globalThis.reflectionHarness;
+  source = `const { react: React, useState, useEffect, useMemo, useRef, helpers: {reflectionKey, reflectionText, reflectionYears}, money: {addMoney}, dates: {parseIsoDateLocal}, api: summariesApi } = globalThis.reflectionHarness;
+const withFinancialErrorBoundary=screen=>screen;
 const View='View', Text='Text', FlatList='FlatList', TouchableOpacity='TouchableOpacity', TextInput='TextInput', KeyboardAvoidingView='KeyboardAvoidingView', ScrollView='ScrollView';
 const StyleSheet={create: x=>x}, Platform={OS:'android'}, Alert={alert:()=>{}}, useAuth=()=>({user:{id:'a'}}), useTheme=()=>({theme:{colors:{},spacing:{},fontSize:{},borderRadius:{}}}), useAppState=()=>({state:{transactions:[]}}), formatCurrency=String, hapticSelection=()=>{}, generateId=()=> 'new-id';
 ` + source;

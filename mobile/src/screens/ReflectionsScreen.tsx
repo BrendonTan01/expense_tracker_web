@@ -1,3 +1,5 @@
+import { withFinancialErrorBoundary } from '../components/FinancialErrorBoundary';
+import { addMoney } from '../utils/money';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity, TextInput,
@@ -8,7 +10,7 @@ import { reflectionKey, reflectionText, reflectionYears } from '../utils/reflect
 import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
 import { summariesApi } from '../utils/api';
-import { formatCurrency } from '../utils/dateHelpers';
+import { parseIsoDateLocal, formatCurrency } from '../utils/dateHelpers';
 import { hapticSelection } from '../utils/haptics';
 import { generateId } from '../utils/storage';
 import { MonthlySummary, YearlySummary } from '../types';
@@ -17,7 +19,7 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'Ju
 
 type ViewMode = 'years' | 'year' | 'month';
 
-export default function ReflectionsScreen() {
+function ReflectionsScreen() {
   const { user } = useAuth();
   return user ? <AccountReflections key={user.id} /> : null;
 }
@@ -69,26 +71,26 @@ function AccountReflections() {
   const changeDraft = (text: string) => setDrafts(current => ({ ...current, [draftKey]: text }));
 
   const getYearTotals = (year: number) => {
-    const yearTxns = state.transactions.filter(t => new Date(t.date).getFullYear() === year);
+    const yearTxns = state.transactions.filter(t => parseIsoDateLocal(t.date).getFullYear() === year);
     let income = 0, expenses = 0, investments = 0;
     yearTxns.forEach(t => {
-      if (t.type === 'income') income += t.amount;
-      else if (t.type === 'expense') expenses += t.amount;
-      else if (t.type === 'investment') investments += t.amount;
+      if (t.type === 'income') income = addMoney(income, t.amount);
+      else if (t.type === 'expense') expenses = addMoney(expenses, t.amount);
+      else if (t.type === 'investment') investments = addMoney(investments, t.amount);
     });
     return { income, expenses, investments };
   };
 
   const getMonthTotals = (year: number, month: number) => {
     const monthTxns = state.transactions.filter(t => {
-      const d = new Date(t.date);
+      const d = parseIsoDateLocal(t.date);
       return d.getFullYear() === year && d.getMonth() + 1 === month;
     });
     let income = 0, expenses = 0, investments = 0;
     monthTxns.forEach(t => {
-      if (t.type === 'income') income += t.amount;
-      else if (t.type === 'expense') expenses += t.amount;
-      else if (t.type === 'investment') investments += t.amount;
+      if (t.type === 'income') income = addMoney(income, t.amount);
+      else if (t.type === 'expense') expenses = addMoney(expenses, t.amount);
+      else if (t.type === 'investment') investments = addMoney(investments, t.amount);
     });
     return { income, expenses, investments };
   };
@@ -326,3 +328,5 @@ function createStyles(theme: any) {
     hasSummaryDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.primary },
   });
 }
+
+export default withFinancialErrorBoundary(ReflectionsScreen);

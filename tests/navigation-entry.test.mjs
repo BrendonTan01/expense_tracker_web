@@ -30,6 +30,7 @@ let nextId = 0;
 const storage = { generateId: () => `entry-${++nextId}` };
 const entry = load('mobile/src/navigation/transactionEntry.ts', { '../utils/storage': storage });
 const date = load('mobile/src/utils/dateHelpers.ts', {});
+const money = load('mobile/src/utils/money.ts', {});
 function mocks(h, state = { buckets: [], transactions: [], budgets: [], recurringTransactions: [] }) {
   return {
     react: h.react,
@@ -39,7 +40,8 @@ function mocks(h, state = { buckets: [], transactions: [], budgets: [], recurrin
     '../contexts/ToastContext': { useToast: () => ({}) },
     '../utils/haptics': { hapticLight() {}, hapticSelection() {}, hapticSuccess() {}, hapticError() {} },
     '../utils/dateHelpers': date, '../utils/storage': storage, '../navigation/transactionEntry': entry,
-    '../utils/money': { parseMoneyInput: Number, getMoneyInputError: () => null },
+    '../utils/money': money,
+    '../components/FinancialErrorBoundary': { withFinancialErrorBoundary: screen => screen },
     '../utils/duplicateDetection': { checkForDuplicates: () => null },
     '../components/TransactionTemplatesSection': 'Templates',
     '@react-native-community/datetimepicker': 'DatePicker', 'react-native-calendars': { Calendar: 'Calendar' },

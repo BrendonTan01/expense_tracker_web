@@ -1,9 +1,23 @@
 import { RecurringFrequency } from '../types';
 
+// Numeric Date constructors reinterpret years 0-99 as 1900-1999.
+// Set the full calendar year explicitly for period and recurrence arithmetic.
+function localCalendarDate(year: number, month: number, day: number): Date {
+  const result = new Date(0);
+  result.setFullYear(year, month, day);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function isIsoDate(value: string | undefined | null): value is string {
-  return typeof value === 'string' && ISO_DATE_RE.test(value);
+  if (typeof value !== 'string' || !ISO_DATE_RE.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+  const days = new Date(0);
+  days.setUTCFullYear(year, month, 0);
+  return day <= days.getUTCDate();
 }
 
 export function normalizeIsoDate(value: string | undefined | null): string | undefined {
@@ -17,11 +31,15 @@ export function parseIsoDateLocal(isoDate: string): Date {
   const d = normalizeIsoDate(isoDate);
   if (!d) return new Date(NaN);
   const [y, m, day] = d.split('-').map(Number);
-  return new Date(y, m - 1, day, 0, 0, 0, 0);
+  const date = new Date(0);
+  date.setFullYear(y, m - 1, day);
+  date.setHours(0, 0, 0, 0);
+  return date;
 }
 
 export function formatIsoDateLocal(date: Date): string {
-  const y = date.getFullYear();
+  if (isNaN(date.getTime())) return 'Invalid date';
+  const y = String(date.getFullYear()).padStart(4, '0');
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
@@ -65,25 +83,25 @@ export function addDaysIsoLocal(isoDate: string, days: number): string {
 export function startOfMonthIsoLocal(isoDate: string): string {
   const d = parseIsoDateLocal(isoDate);
   if (isNaN(d.getTime())) return todayIsoLocal();
-  return formatIsoDateLocal(new Date(d.getFullYear(), d.getMonth(), 1));
+  return formatIsoDateLocal(localCalendarDate(d.getFullYear(), d.getMonth(), 1));
 }
 
 export function endOfMonthIsoLocal(isoDate: string): string {
   const d = parseIsoDateLocal(isoDate);
   if (isNaN(d.getTime())) return todayIsoLocal();
-  return formatIsoDateLocal(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+  return formatIsoDateLocal(localCalendarDate(d.getFullYear(), d.getMonth() + 1, 0));
 }
 
 export function startOfYearIsoLocal(isoDate: string): string {
   const d = parseIsoDateLocal(isoDate);
   if (isNaN(d.getTime())) return todayIsoLocal();
-  return formatIsoDateLocal(new Date(d.getFullYear(), 0, 1));
+  return formatIsoDateLocal(localCalendarDate(d.getFullYear(), 0, 1));
 }
 
 export function endOfYearIsoLocal(isoDate: string): string {
   const d = parseIsoDateLocal(isoDate);
   if (isNaN(d.getTime())) return todayIsoLocal();
-  return formatIsoDateLocal(new Date(d.getFullYear(), 11, 31));
+  return formatIsoDateLocal(localCalendarDate(d.getFullYear(), 11, 31));
 }
 
 export function startOfWeekIsoLocal(isoDate: string, weekStartsOn: 0 | 1 = 1): string {
@@ -117,7 +135,7 @@ export function enumerateIsoDaysInclusive(startIso: string, endIso: string): str
 }
 
 function lastDayOfMonth(year: number, monthIndex: number): number {
-  return new Date(year, monthIndex + 1, 0).getDate();
+  return localCalendarDate(year, monthIndex + 1, 0).getDate();
 }
 
 /** First scheduled occurrence after lastApplied, or the start when never applied. */
@@ -196,8 +214,8 @@ function firstOccurrenceOnOrAfter(
   if (frequency === 'monthly') {
     let monthOffset = (target.getFullYear() - start.getFullYear()) * 12 + target.getMonth() - start.getMonth();
     const occurrence = (offset: number) => {
-      const month = new Date(start.getFullYear(), start.getMonth() + offset, 1);
-      return formatIsoDateLocal(new Date(month.getFullYear(), month.getMonth(),
+      const month = localCalendarDate(start.getFullYear(), start.getMonth() + offset, 1);
+      return formatIsoDateLocal(localCalendarDate(month.getFullYear(), month.getMonth(),
         Math.min(start.getDate(), lastDayOfMonth(month.getFullYear(), month.getMonth()))));
     };
     if (occurrence(monthOffset) < targetIso) monthOffset += 1;
@@ -205,7 +223,7 @@ function firstOccurrenceOnOrAfter(
   }
 
   let year = target.getFullYear();
-  const occurrence = (y: number) => formatIsoDateLocal(new Date(y, start.getMonth(),
+  const occurrence = (y: number) => formatIsoDateLocal(localCalendarDate(y, start.getMonth(),
     Math.min(start.getDate(), lastDayOfMonth(y, start.getMonth()))));
   if (occurrence(year) < targetIso) year += 1;
   return occurrence(year);
@@ -248,6 +266,7 @@ export function formatDate(dateString: string): string {
   if (!dateString) return 'Invalid date';
   try {
     const normalized = normalizeIsoDate(dateString);
+    if (ISO_DATE_RE.test(dateString.split('T')[0]) && !normalized) return 'Invalid date';
     const date = normalized ? parseIsoDateLocal(normalized) : new Date(dateString);
     if (isNaN(date.getTime())) return 'Invalid date';
     return date.toLocaleDateString();
@@ -262,4 +281,15 @@ export function formatCurrency(amount: number): string {
     style: 'currency',
     currency: 'USD',
   }).format(amount);
+}
+
+/** Calendar-day distance is independent of daylight-saving hours. */
+export function calendarDayNumber(isoDate: string): number {
+  const iso = normalizeIsoDate(isoDate);
+  if (!iso) return NaN;
+  const [year, month, day] = iso.split('-').map(Number);
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(0, 0, 0, 0);
+  return date.getTime() / 86400000;
 }

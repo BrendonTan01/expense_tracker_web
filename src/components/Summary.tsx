@@ -1,6 +1,7 @@
+import { addMoney, subtractMoney } from '../utils/money';
 import { useState, useMemo, useEffect } from 'react';
 import { Transaction, Bucket, Budget } from '../types';
-import { formatCurrency } from '../utils/dateHelpers';
+import { calendarDayNumber, parseIsoDateLocal, formatCurrency } from '../utils/dateHelpers';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie, LineChart, Line } from 'recharts';
 import SummaryNotes from './SummaryNotes';
 import { calculateSpendingTrends, calculateCategoryAverages, compareCategorySpending } from '../utils/analytics';
@@ -183,11 +184,11 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
 
   const filteredTransactions = useMemo(() => {
     if (useCustomRange && customStartDate && customEndDate) {
-      const start = new Date(customStartDate);
-      const end = new Date(customEndDate);
+      const start = parseIsoDateLocal(customStartDate);
+      const end = parseIsoDateLocal(customEndDate);
       end.setHours(23, 59, 59, 999); // Include the entire end date
       return transactions.filter((t) => {
-        const date = new Date(t.date);
+        const date = parseIsoDateLocal(t.date);
         return date >= start && date <= end;
       });
     }
@@ -232,7 +233,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
     }
 
     return transactions.filter((t) => {
-      const transactionDate = new Date(t.date);
+      const transactionDate = parseIsoDateLocal(t.date);
       return transactionDate >= startDate && transactionDate <= endDate;
     });
   }, [transactions, period, useCustomRange, customStartDate, customEndDate]);
@@ -240,17 +241,17 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
   const totals = useMemo(() => {
     const income = filteredTransactions
       .filter((t) => t.type === 'income')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => addMoney(sum, t.amount), 0);
 
     const expenses = filteredTransactions
       .filter((t) => t.type === 'expense')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => addMoney(sum, t.amount), 0);
 
     const investments = filteredTransactions
       .filter((t) => t.type === 'investment')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => addMoney(sum, t.amount), 0);
 
-    const balance = income - expenses - investments;
+    const balance = subtractMoney(income, expenses, investments);
     const savingPercentage = income > 0 ? (balance / income) * 100 : 0;
 
     return {
@@ -269,7 +270,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
       .filter((t) => t.type === 'expense' && t.bucketId)
       .forEach((t) => {
         const bucketId = t.bucketId!;
-        breakdown[bucketId] = (breakdown[bucketId] || 0) + t.amount;
+        breakdown[bucketId] = addMoney((breakdown[bucketId] || 0), t.amount);
       });
 
     return Object.entries(breakdown)
@@ -309,12 +310,17 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
         }
       })
       .map((budget) => {
-        const bucketExpenses = filteredTransactions
-          .filter((t) => t.type === 'expense' && t.bucketId === budget.bucketId)
-          .reduce((sum, t) => sum + t.amount, 0);
+        const bucketExpenses = transactions
+          .filter((t) => {
+            const date = parseIsoDateLocal(t.date);
+            return t.type === 'expense' && t.bucketId === budget.bucketId &&
+              date.getFullYear() === budget.year &&
+              (budget.period === 'yearly' || date.getMonth() + 1 === budget.month);
+          })
+          .reduce((sum, t) => addMoney(sum, t.amount), 0);
 
         const percentage = (bucketExpenses / budget.amount) * 100;
-        const remaining = budget.amount - bucketExpenses;
+        const remaining = subtractMoney(budget.amount, bucketExpenses);
 
         return {
           budget,
@@ -326,7 +332,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
           isOverBudget: bucketExpenses > budget.amount,
         };
       });
-  }, [budgets, filteredTransactions, buckets, period, useCustomRange, customStartDate, customEndDate, budgetFilter]);
+  }, [budgets, transactions, buckets, budgetFilter]);
 
   // Spending trends - compare current period with previous period
   const spendingTrends = useMemo(() => {
@@ -367,54 +373,54 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
 
     const currentExpenses = transactions
       .filter((t) => {
-        const date = new Date(t.date);
+        const date = parseIsoDateLocal(t.date);
         return t.type === 'expense' && date >= currentStart && date <= currentEnd;
       })
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => addMoney(sum, t.amount), 0);
 
     const previousExpenses = transactions
       .filter((t) => {
-        const date = new Date(t.date);
+        const date = parseIsoDateLocal(t.date);
         return t.type === 'expense' && date >= previousStart && date <= previousEnd;
       })
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => addMoney(sum, t.amount), 0);
 
     const currentIncome = transactions
       .filter((t) => {
-        const date = new Date(t.date);
+        const date = parseIsoDateLocal(t.date);
         return t.type === 'income' && date >= currentStart && date <= currentEnd;
       })
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => addMoney(sum, t.amount), 0);
 
     const previousIncome = transactions
       .filter((t) => {
-        const date = new Date(t.date);
+        const date = parseIsoDateLocal(t.date);
         return t.type === 'income' && date >= previousStart && date <= previousEnd;
       })
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => addMoney(sum, t.amount), 0);
 
     const currentInvestments = transactions
       .filter((t) => {
-        const date = new Date(t.date);
+        const date = parseIsoDateLocal(t.date);
         return t.type === 'investment' && date >= currentStart && date <= currentEnd;
       })
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => addMoney(sum, t.amount), 0);
 
     const previousInvestments = transactions
       .filter((t) => {
-        const date = new Date(t.date);
+        const date = parseIsoDateLocal(t.date);
         return t.type === 'investment' && date >= previousStart && date <= previousEnd;
       })
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => addMoney(sum, t.amount), 0);
 
     const expenseChange = previousExpenses > 0 
-      ? ((currentExpenses - previousExpenses) / previousExpenses) * 100 
+      ? ((subtractMoney(currentExpenses, previousExpenses)) / previousExpenses) * 100
       : 0;
     const incomeChange = previousIncome > 0 
-      ? ((currentIncome - previousIncome) / previousIncome) * 100 
+      ? ((subtractMoney(currentIncome, previousIncome)) / previousIncome) * 100
       : 0;
     const investmentChange = previousInvestments > 0
-      ? ((currentInvestments - previousInvestments) / previousInvestments) * 100
+      ? ((subtractMoney(currentInvestments, previousInvestments)) / previousInvestments) * 100
       : (currentInvestments > 0 ? 100 : 0);
 
     return {
@@ -571,10 +577,10 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
     const investments = filteredTransactions.filter((t) => t.type === 'investment');
     if (investments.length === 0) return null;
 
-    const total = investments.reduce((sum, t) => sum + t.amount, 0);
+    const total = investments.reduce((sum, t) => addMoney(sum, t.amount), 0);
     const average = total / investments.length;
     const largest = investments.reduce((prev, current) => current.amount > prev.amount ? current : prev, investments[0]);
-    const mostRecent = [...investments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    const mostRecent = [...investments].sort((a, b) => parseIsoDateLocal(b.date).getTime() - parseIsoDateLocal(a.date).getTime())[0];
 
     return { total, average, largest, mostRecent, count: investments.length };
   }, [filteredTransactions]);
@@ -612,9 +618,9 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
     if (filteredTransactions.length === 0) return [];
 
     // Determine grouping based on date range
-    const dates = filteredTransactions.map(t => new Date(t.date));
-    const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
-    const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+    const dates = filteredTransactions.map(t => parseIsoDateLocal(t.date));
+    const minDate = new Date(dates.reduce((min, date) => Math.min(min, date.getTime()), Infinity));
+    const maxDate = new Date(dates.reduce((max, date) => Math.max(max, date.getTime()), -Infinity));
     const diffMonths = (maxDate.getFullYear() - minDate.getFullYear()) * 12 + (maxDate.getMonth() - minDate.getMonth());
     
     // Group by month if range is less than 2 years, otherwise by year
@@ -623,7 +629,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
     const grouped: Record<string, { income: number; expenses: number; investments: number; bucketBreakdown: Record<string, number> }> = {};
 
     filteredTransactions.forEach((t) => {
-      const date = new Date(t.date);
+      const date = parseIsoDateLocal(t.date);
       let key: string;
       
       if (groupByMonth) {
@@ -637,13 +643,13 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
       }
 
       if (t.type === 'income') {
-        grouped[key].income += t.amount;
+        grouped[key].income = addMoney(grouped[key].income, t.amount);
       } else if (t.type === 'expense') {
-        grouped[key].expenses += t.amount;
+        grouped[key].expenses = addMoney(grouped[key].expenses, t.amount);
         const bucketKey = t.bucketId || 'no-bucket';
-        grouped[key].bucketBreakdown[bucketKey] = (grouped[key].bucketBreakdown[bucketKey] || 0) + t.amount;
+        grouped[key].bucketBreakdown[bucketKey] = addMoney((grouped[key].bucketBreakdown[bucketKey] || 0), t.amount);
       } else if (t.type === 'investment') {
-        grouped[key].investments += t.amount;
+        grouped[key].investments = addMoney(grouped[key].investments, t.amount);
       }
     });
 
@@ -653,7 +659,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
       .map(([periodKey, data]) => {
         return {
           period: groupByMonth 
-            ? new Date(periodKey + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
+            ? parseIsoDateLocal(periodKey + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
             : periodKey,
           periodKey: periodKey, // Store original key for month clicks
           income: data.income,
@@ -953,14 +959,14 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
               <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Largest contribution</div>
               <div style={{ fontSize: '22px', fontWeight: 700 }}>{formatCurrency(investmentInsights.largest.amount)}</div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                {new Date(investmentInsights.largest.date).toLocaleDateString()}
+                {parseIsoDateLocal(investmentInsights.largest.date).toLocaleDateString()}
               </div>
             </div>
             <div style={{ background: 'var(--card-bg)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
               <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Most recent</div>
               <div style={{ fontSize: '22px', fontWeight: 700 }}>{formatCurrency(investmentInsights.mostRecent.amount)}</div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                {investmentInsights.mostRecent.description} • {new Date(investmentInsights.mostRecent.date).toLocaleDateString()}
+                {investmentInsights.mostRecent.description} • {parseIsoDateLocal(investmentInsights.mostRecent.date).toLocaleDateString()}
               </div>
             </div>
           </div>
@@ -1473,7 +1479,7 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
                   wrapperStyle={{ paddingTop: '20px' }}
                   formatter={(value) => {
                     const dataEntry = pieChartData.find(d => d.name === value);
-                    const percent = dataEntry ? ((dataEntry.value / pieChartData.reduce((sum, d) => sum + d.value, 0)) * 100).toFixed(0) : '0';
+                    const percent = dataEntry ? ((dataEntry.value / pieChartData.reduce((sum, d) => addMoney(sum, d.value), 0)) * 100).toFixed(0) : '0';
                     return `${value} (${percent}%)`;
                   }}
                 />}
@@ -1543,10 +1549,9 @@ export default function Summary({ transactions, buckets, budgets }: SummaryProps
           displayYear = yearDate.getFullYear();
           summaryType = 'yearly';
         } else if (useCustomRange && customStartDate && customEndDate) {
-          const start = new Date(customStartDate);
-          const end = new Date(customEndDate);
-          const diffTime = Math.abs(end.getTime() - start.getTime());
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          const start = parseIsoDateLocal(customStartDate);
+          const end = parseIsoDateLocal(customEndDate);
+          const diffDays = Math.abs(calendarDayNumber(customEndDate) - calendarDayNumber(customStartDate));
           
           // If custom range is within a single month, show monthly summary
           if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear() && diffDays <= 31) {

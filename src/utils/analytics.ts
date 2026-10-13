@@ -1,3 +1,5 @@
+import { addMoney, subtractMoney } from './money';
+import { parseIsoDateLocal } from './dateHelpers';
 import { Transaction, Bucket } from '../types';
 
 export interface SpendingTrend {
@@ -51,19 +53,19 @@ export function calculateSpendingTrends(
   
   // Aggregate transactions
   transactions.forEach(t => {
-    const date = new Date(t.date);
+    const date = parseIsoDateLocal(t.date);
     const periodKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     
     if (trends.has(periodKey)) {
       const trend = trends.get(periodKey)!;
       if (t.type === 'income') {
-        trend.income += t.amount;
+        trend.income = addMoney(trend.income, t.amount);
       } else if (t.type === 'expense') {
-        trend.expenses += t.amount;
+        trend.expenses = addMoney(trend.expenses, t.amount);
       } else if (t.type === 'investment') {
-        trend.investments += t.amount;
+        trend.investments = addMoney(trend.investments, t.amount);
       }
-      trend.balance = trend.income - trend.expenses - trend.investments;
+      trend.balance = subtractMoney(trend.income, trend.expenses, trend.investments);
     }
   });
   
@@ -77,7 +79,7 @@ export function calculateSpendingTrends(
     const previous = sortedTrends[i - 1];
     
     if (previous.expenses > 0) {
-      current.changeFromPrevious = ((current.expenses - previous.expenses) / previous.expenses) * 100;
+      current.changeFromPrevious = ((subtractMoney(current.expenses, previous.expenses)) / previous.expenses) * 100;
     } else if (current.expenses > 0) {
       current.changeFromPrevious = 100;
     } else {
@@ -106,35 +108,35 @@ export function comparePeriods(
   const previous = { income: 0, expenses: 0, investments: 0, balance: 0 };
   
   transactions.forEach(t => {
-    const date = new Date(t.date);
+    const date = parseIsoDateLocal(t.date);
     
     if (date >= currentStart && date <= currentEnd) {
       if (t.type === 'income') {
-        current.income += t.amount;
+        current.income = addMoney(current.income, t.amount);
       } else if (t.type === 'expense') {
-        current.expenses += t.amount;
+        current.expenses = addMoney(current.expenses, t.amount);
       } else if (t.type === 'investment') {
-        current.investments += t.amount;
+        current.investments = addMoney(current.investments, t.amount);
       }
     } else if (date >= previousStart && date <= previousEnd) {
       if (t.type === 'income') {
-        previous.income += t.amount;
+        previous.income = addMoney(previous.income, t.amount);
       } else if (t.type === 'expense') {
-        previous.expenses += t.amount;
+        previous.expenses = addMoney(previous.expenses, t.amount);
       } else if (t.type === 'investment') {
-        previous.investments += t.amount;
+        previous.investments = addMoney(previous.investments, t.amount);
       }
     }
   });
   
-  current.balance = current.income - current.expenses - current.investments;
-  previous.balance = previous.income - previous.expenses - previous.investments;
+  current.balance = subtractMoney(current.income, current.expenses, current.investments);
+  previous.balance = subtractMoney(previous.income, previous.expenses, previous.investments);
   
   const change = {
-    income: current.income - previous.income,
-    expenses: current.expenses - previous.expenses,
-    investments: current.investments - previous.investments,
-    balance: current.balance - previous.balance,
+    income: subtractMoney(current.income, previous.income),
+    expenses: subtractMoney(current.expenses, previous.expenses),
+    investments: subtractMoney(current.investments, previous.investments),
+    balance: subtractMoney(current.balance, previous.balance),
   };
   
   return { current, previous, change };
@@ -154,7 +156,7 @@ export function calculateCategoryAverages(
     .forEach(t => {
       const bucketId = t.bucketId!;
       const existing = categoryTotals.get(bucketId) || { total: 0, count: 0 };
-      existing.total += t.amount;
+      existing.total = addMoney(existing.total, t.amount);
       existing.count += 1;
       categoryTotals.set(bucketId, existing);
     });
@@ -190,13 +192,13 @@ export function compareCategorySpending(
   transactions
     .filter(t => t.type === 'expense' && t.bucketId)
     .forEach(t => {
-      const date = new Date(t.date);
+      const date = parseIsoDateLocal(t.date);
       const bucketId = t.bucketId!;
       
       if (date >= currentStart && date <= currentEnd) {
-        currentTotals.set(bucketId, (currentTotals.get(bucketId) || 0) + t.amount);
+        currentTotals.set(bucketId, addMoney((currentTotals.get(bucketId) || 0), t.amount));
       } else if (date >= previousStart && date <= previousEnd) {
-        previousTotals.set(bucketId, (previousTotals.get(bucketId) || 0) + t.amount);
+        previousTotals.set(bucketId, addMoney((previousTotals.get(bucketId) || 0), t.amount));
       }
     });
   
@@ -207,7 +209,7 @@ export function compareCategorySpending(
       const bucket = buckets.find(b => b.id === bucketId);
       const current = currentTotals.get(bucketId) || 0;
       const previous = previousTotals.get(bucketId) || 0;
-      const changeAmount = current - previous;
+      const changeAmount = subtractMoney(current, previous);
       const change = previous > 0 ? (changeAmount / previous) * 100 : (current > 0 ? 100 : 0);
       
       return {

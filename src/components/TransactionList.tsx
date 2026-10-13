@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Transaction, Bucket, FilterPreset } from '../types';
-import { formatDate, formatCurrency } from '../utils/dateHelpers';
+import { parseIsoDateLocal, todayIsoLocal, formatDate, formatCurrency } from '../utils/dateHelpers';
 import { saveToLocalStorage, loadFromLocalStorage, generateId } from '../utils/storage';
 
 interface TransactionListProps {
@@ -33,7 +33,7 @@ export default function TransactionList({
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState(() => {
     // Default to current system date
-    return new Date().toISOString().split('T')[0];
+    return todayIsoLocal();
   });
   const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
@@ -87,13 +87,13 @@ export default function TransactionList({
 
       // Date range filter
       if (startDate) {
-        const transactionDate = new Date(t.date);
-        const start = new Date(startDate);
+        const transactionDate = parseIsoDateLocal(t.date);
+        const start = parseIsoDateLocal(startDate);
         if (transactionDate < start) return false;
       }
       if (endDate) {
-        const transactionDate = new Date(t.date);
-        const end = new Date(endDate);
+        const transactionDate = parseIsoDateLocal(t.date);
+        const end = parseIsoDateLocal(endDate);
         end.setHours(23, 59, 59, 999);
         if (transactionDate > end) return false;
       }
@@ -116,7 +116,7 @@ export default function TransactionList({
     return [...filteredTransactions].sort((a, b) => {
       let comparison = 0;
       if (sortBy === 'date') {
-        comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+        comparison = parseIsoDateLocal(a.date).getTime() - parseIsoDateLocal(b.date).getTime();
       } else {
         comparison = a.amount - b.amount;
       }
@@ -145,7 +145,7 @@ export default function TransactionList({
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `transactions_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `transactions_${todayIsoLocal()}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();

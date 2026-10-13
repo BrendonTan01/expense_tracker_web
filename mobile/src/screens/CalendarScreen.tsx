@@ -1,3 +1,5 @@
+import { withFinancialErrorBoundary } from '../components/FinancialErrorBoundary';
+import { addMoney } from '../utils/money';
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl,
@@ -5,14 +7,14 @@ import {
 import { Calendar } from 'react-native-calendars';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
-import { formatCurrency, formatDate, todayIsoLocal } from '../utils/dateHelpers';
+import { parseIsoDateLocal, formatCurrency, formatDate, todayIsoLocal } from '../utils/dateHelpers';
 import { hapticLight, hapticSelection } from '../utils/haptics';
 import { Transaction } from '../types';
 import { transactionEntry } from '../navigation/transactionEntry';
 
 type CalendarMode = 'month' | 'day';
 
-export default function CalendarScreen({ navigation }: any) {
+function CalendarScreen({ navigation }: any) {
   const { theme } = useTheme();
   const { state, refreshAll } = useAppState();
   const [selectedDate, setSelectedDate] = useState(todayIsoLocal());
@@ -30,7 +32,7 @@ export default function CalendarScreen({ navigation }: any) {
     const map = new Map<string, number>();
     state.transactions.forEach(t => {
       if (t.type === 'expense') {
-        map.set(t.date, (map.get(t.date) || 0) + t.amount);
+        map.set(t.date, addMoney((map.get(t.date) || 0), t.amount));
       }
     });
     return map;
@@ -94,9 +96,9 @@ export default function CalendarScreen({ navigation }: any) {
   const selectedDayTotals = useMemo(() => {
     let income = 0, expenses = 0, investments = 0;
     selectedTransactions.forEach(t => {
-      if (t.type === 'income') income += t.amount;
-      else if (t.type === 'expense') expenses += t.amount;
-      else if (t.type === 'investment') investments += t.amount;
+      if (t.type === 'income') income = addMoney(income, t.amount);
+      else if (t.type === 'expense') expenses = addMoney(expenses, t.amount);
+      else if (t.type === 'investment') investments = addMoney(investments, t.amount);
     });
     return { income, expenses, investments };
   }, [selectedTransactions]);
@@ -229,8 +231,8 @@ export default function CalendarScreen({ navigation }: any) {
             return monthBudgets.map(b => {
               const bucket = state.buckets.find(bk => bk.id === b.bucketId);
               const spent = state.transactions
-                .filter(t => t.type === 'expense' && t.bucketId === b.bucketId && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === year)
-                .reduce((s, t) => s + t.amount, 0);
+                .filter(t => t.type === 'expense' && t.bucketId === b.bucketId && parseIsoDateLocal(t.date).getMonth() + 1 === month && parseIsoDateLocal(t.date).getFullYear() === year)
+                .reduce((s, t) => addMoney(s, t.amount), 0);
               const pct = b.amount > 0 ? (spent / b.amount) * 100 : 0;
               return (
                 <View key={b.id} style={styles.budgetItem}>
@@ -304,3 +306,5 @@ function createStyles(theme: any) {
     progressFill: { height: '100%', borderRadius: 3 },
   });
 }
+
+export default withFinancialErrorBoundary(CalendarScreen);

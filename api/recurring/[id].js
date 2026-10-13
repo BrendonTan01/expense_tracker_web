@@ -1,5 +1,6 @@
 import { isDate, isValidAmount, MONEY_ERROR, checkOwnedReferences } from '../../lib/validation.js';
 import { getAuthenticatedClient } from '../../lib/supabase.js';
+import { recurringUpdatesError, validRequestId, financialErrorResponse } from '../../lib/financial.js';
 
 export default async function handler(req, res) {
   // Set CORS headers
@@ -21,6 +22,20 @@ export default async function handler(req, res) {
     
     if (authError) {
       return res.status(401).json({ error: authError });
+    }
+
+    if (req.method === 'PUT' && req.query?.action === 'edit') {
+      const { updates, historyScope, today, requestId } = req.body || {};
+      const invalid = recurringUpdatesError(updates);
+      if (!validRequestId(id) || !validRequestId(requestId) || !['none', 'all', 'fromNext'].includes(historyScope) || !isDate(today) || invalid) {
+        return res.status(400).json({ error: invalid || 'Invalid recurring edit request' });
+      }
+      const { data, error } = await supabase.rpc('edit_recurring_transaction', {
+        p_id: id, p_updates: updates, p_history_scope: historyScope, p_today: today, p_request_id: requestId,
+      });
+      if (error) return financialErrorResponse(res, error);
+      if (!data || !Object.prototype.hasOwnProperty.call(data, 'recurring')) return res.status(503).json({ error: 'Invalid financial database response' });
+      return res.status(200).json(data);
     }
 
     if (req.method === 'GET') {

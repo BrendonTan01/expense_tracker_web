@@ -20,31 +20,38 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'GET') {
-      // GET all transactions with filters (RLS will automatically filter by user_id)
-      const { startDate, endDate, type } = req.query;
-      let query = supabase
-        .from('transactions')
-        .select('*');
-
-      if (startDate) {
-        query = query.gte('date', startDate);
+      const { startDate, endDate, type } = req.query || {};
+      // Empty query strings retain the legacy meaning of "no filter". Repeated
+      // query keys and invalid dates must never become ambiguous database filters.
+      if ((startDate !== undefined && startDate !== '' && !isDate(startDate)) ||
+          (endDate !== undefined && endDate !== '' && !isDate(endDate))) {
+        return res.status(400).json({ error: 'Date filters must be valid YYYY-MM-DD dates' });
       }
-      if (endDate) {
-        query = query.lte('date', endDate);
-      }
-      if (type) {
-        query = query.eq('type', type);
+      if (type !== undefined && type !== '' && !['expense', 'income', 'investment'].includes(type)) {
+        return res.status(400).json({ error: 'type must be either "expense", "income", or "investment"' });
       }
 
-      query = query.order('date', { ascending: false })
-        .order('id', { ascending: false });
-
-      const { data, error } = await query;
-
-      if (error) throw error;
+      // A scalar JSON aggregate is one database result, so the PostgREST row cap
+      // cannot truncate it. One STABLE call reads one snapshot, including equal
+      // dates, instead of drifting between offset pages during concurrent writes.
+      const { data, error } = await supabase.rpc('get_transaction_history', {
+        p_start_date: startDate || null,
+        p_end_date: endDate || null,
+        p_type: type || null,
+      });
+      if (error) {
+        if (error.code === 'PGRST202' || error.code === '42883') {
+          return res.status(503).json({ error: 'Complete transaction history requires the database history update. Ask the app administrator to apply it before retrying.' });
+        }
+        console.error('Transaction history read failed:', error.code);
+        return res.status(500).json({ error: 'Could not load complete transaction history. Please retry.' });
+      }
+      if (!Array.isArray(data)) {
+        return res.status(503).json({ error: 'The database history response is incompatible. Ask the app administrator to check the database history update.' });
+      }
 
       // Convert isRecurring from integer to boolean and parse tags
-      const transactions = (data || []).map(t => ({
+      const transactions = data.map(t => ({
         ...t,
         isRecurring: Boolean(t.isRecurring),
         bucketId: t.bucketId || undefined,

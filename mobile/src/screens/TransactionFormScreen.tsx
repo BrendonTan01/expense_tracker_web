@@ -4,7 +4,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
   KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker, { type DateTimePickerChangeEvent } from '@react-native-community/datetimepicker';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAppState } from '../contexts/AppStateContext';
 import { useToast } from '../contexts/ToastContext';
@@ -184,11 +184,9 @@ export default function TransactionFormScreen({ navigation, route }: any) {
     setTags(tags.filter(t => t !== tag));
   };
 
-  const handleDateChange = (_: any, selectedDate?: Date) => {
+  const handleDateChange = (_: DateTimePickerChangeEvent, selectedDate: Date) => {
     setShowDatePicker(Platform.OS === 'ios');
-    if (selectedDate) {
-      setDate(formatIsoDateLocal(selectedDate));
-    }
+    setDate(formatIsoDateLocal(selectedDate));
   };
 
   return (
@@ -328,7 +326,8 @@ export default function TransactionFormScreen({ navigation, route }: any) {
               value={parseIsoDateLocal(date)}
               mode="date"
               display={Platform.OS === 'ios' ? 'inline' : 'default'}
-              onChange={handleDateChange}
+              onValueChange={handleDateChange}
+              onDismiss={() => setShowDatePicker(false)}
               themeVariant={theme.isDark ? 'dark' : 'light'}
             />
           )}

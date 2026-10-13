@@ -1,3 +1,4 @@
+import { addMoney, subtractMoney } from '../utils/money';
 import { useMemo, useState } from 'react';
 import { Bucket, Budget, RecurringTransaction, Transaction } from '../types';
 import { formatCurrency, getOccurrenceDatesBetween, normalizeIsoDate, parseIsoDateLocal, todayIsoLocal, startOfMonthIsoLocal, endOfMonthIsoLocal, startOfWeekIsoLocal, endOfWeekIsoLocal, startOfYearIsoLocal, endOfYearIsoLocal, enumerateIsoDaysInclusive } from '../utils/dateHelpers';
@@ -62,7 +63,7 @@ function postedExpenseTotal(items: CalendarItem[]): number {
   for (const item of items) {
     if (item.kind !== 'posted') continue;
     if (item.transaction.type !== 'expense') continue;
-    total += item.transaction.amount;
+    total = addMoney(total, item.transaction.amount);
   }
   return total;
 }
@@ -230,12 +231,12 @@ function computeStats(items: CalendarItem[], buckets: Bucket[], includeScheduled
             isRecurring: true,
           } as Transaction);
 
-    if (t.type === 'income') income += t.amount;
+    if (t.type === 'income') income = addMoney(income, t.amount);
     else if (t.type === 'expense') {
-      expenses += t.amount;
+      expenses = addMoney(expenses, t.amount);
       const key = t.bucketId || 'no-bucket';
-      bucketTotals[key] = (bucketTotals[key] || 0) + t.amount;
-    } else if (t.type === 'investment') investments += t.amount;
+      bucketTotals[key] = addMoney((bucketTotals[key] || 0), t.amount);
+    } else if (t.type === 'investment') investments = addMoney(investments, t.amount);
   }
 
   const bucketBreakdown = Object.entries(bucketTotals)
@@ -247,7 +248,7 @@ function computeStats(items: CalendarItem[], buckets: Bucket[], includeScheduled
     }))
     .sort((a, b) => b.total - a.total);
 
-  const balance = income - expenses - investments;
+  const balance = subtractMoney(income, expenses, investments);
 
   return { income, expenses, investments, balance, bucketBreakdown };
 }
@@ -343,7 +344,7 @@ function YearGrid(props: {
         for (const dayIso of days) {
           const items = props.itemsByDate.get(dayIso) || [];
           for (const item of items) {
-            if (item.kind === 'posted' && item.transaction.type === 'expense') monthExpenses += item.transaction.amount;
+            if (item.kind === 'posted' && item.transaction.type === 'expense') monthExpenses = addMoney(monthExpenses, item.transaction.amount);
           }
         }
 
@@ -528,7 +529,7 @@ function BudgetProgress(props: {
   const spentByBucket: Record<string, number> = {};
   for (const t of postedExpenses) {
     const key = t.bucketId!;
-    spentByBucket[key] = (spentByBucket[key] || 0) + t.amount;
+    spentByBucket[key] = addMoney((spentByBucket[key] || 0), t.amount);
   }
 
   return (

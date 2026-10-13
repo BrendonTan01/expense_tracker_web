@@ -1,3 +1,4 @@
+import { addMoney, subtractMoney } from '../utils/money';
 import { useMemo } from 'react';
 import { Transaction, Bucket } from '../types';
 import { calculateSpendingTrends, calculateCategoryAverages, compareCategorySpending } from '../utils/analytics';
@@ -25,23 +26,23 @@ export default function EnhancedAnalytics({ transactions, buckets }: EnhancedAna
   );
 
   const totalIncome = useMemo(() => 
-    transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0),
+    transactions.filter(t => t.type === 'income').reduce((sum, t) => addMoney(sum, t.amount), 0),
     [transactions]
   );
   
   const totalExpenses = useMemo(() => 
-    transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0),
+    transactions.filter(t => t.type === 'expense').reduce((sum, t) => addMoney(sum, t.amount), 0),
     [transactions]
   );
 
   const totalInvestments = useMemo(() =>
-    transactions.filter(t => t.type === 'investment').reduce((sum, t) => sum + t.amount, 0),
+    transactions.filter(t => t.type === 'investment').reduce((sum, t) => addMoney(sum, t.amount), 0),
     [transactions]
   );
 
   const averageTransactionAmount = useMemo(() => {
     if (transactions.length === 0) return 0;
-    return transactions.reduce((sum, t) => sum + t.amount, 0) / transactions.length;
+    return transactions.reduce((sum, t) => addMoney(sum, t.amount), 0) / transactions.length;
   }, [transactions]);
 
   return (
@@ -106,9 +107,9 @@ export default function EnhancedAnalytics({ transactions, buckets }: EnhancedAna
           <div style={{
             fontSize: '24px',
             fontWeight: 600,
-            color: totalIncome - totalExpenses - totalInvestments >= 0 ? 'var(--success-color)' : 'var(--danger-color)'
+            color: subtractMoney(totalIncome, totalExpenses, totalInvestments) >= 0 ? 'var(--success-color)' : 'var(--danger-color)'
           }}>
-            {formatCurrency(totalIncome - totalExpenses - totalInvestments)}
+            {formatCurrency(subtractMoney(totalIncome, totalExpenses, totalInvestments))}
           </div>
         </div>
         <div style={{

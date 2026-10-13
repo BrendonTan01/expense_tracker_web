@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { AppState, Bucket, Transaction, RecurringTransaction, Budget } from '../types';
-import { appStateApi, bucketsApi, transactionsApi, recurringApi, budgetsApi, getSessionGeneration, assertSessionGeneration } from '../utils/api';
+import { appStateApi, bucketsApi, transactionsApi, recurringApi, budgetsApi, RecurringEditPatch, getSessionGeneration, assertSessionGeneration } from '../utils/api';
 import { useAuth } from './AuthContext';
 import { createTransactionUndo, deleteIndividually, DeleteResult } from '../utils/transactionDeletion';
 import { todayIsoLocal } from '../utils/dateHelpers';
@@ -22,10 +22,11 @@ interface AppStateContextType {
   createDeleteUndo: (transactions: Transaction[]) => () => Promise<void>;
   // Recurring
   addRecurring: (recurring: RecurringTransaction) => Promise<void>;
-  updateRecurring: (id: string, updates: Partial<RecurringTransaction>) => Promise<void>;
+  updateRecurring: (id: string, updates: RecurringEditPatch, requestId: string, today: string) => Promise<void>;
   deleteRecurring: (id: string) => Promise<void>;
   // Budgets
   addBudget: (budget: Budget) => Promise<void>;
+  addBudgets: (budgets: Budget[], requestId: string) => Promise<void>;
   updateBudget: (id: string, updates: Partial<Budget>) => Promise<void>;
   deleteBudget: (id: string) => Promise<void>;
 }
@@ -188,12 +189,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     applyMutation(prev => getSessionGeneration() !== sessionGeneration ? prev : ({ ...prev, recurringTransactions: [...prev.recurringTransactions, created] }));
   }, [assertActive, applyMutation]);
 
-  const updateRecurring = useCallback(async (id: string, updates: Partial<RecurringTransaction>) => {
+  const updateRecurring = useCallback(async (id: string, updates: RecurringEditPatch, requestId: string, today: string) => {
     assertActive();
-    const updated = await recurringApi.update(id, updates);
+    await recurringApi.edit(id, updates, { historyScope: 'none', requestId, today });
     assertActive();
-    applyMutation(prev => getSessionGeneration() !== sessionGeneration ? prev : ({ ...prev, recurringTransactions: prev.recurringTransactions.map(r => r.id === id ? updated : r) }));
-  }, [assertActive, applyMutation]);
+    mutationRevision.current += 1;
+    await refreshAll(false);
+  }, [assertActive, refreshAll]);
 
   const deleteRecurring = useCallback(async (id: string) => {
     assertActive();
@@ -209,6 +211,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     assertActive();
     applyMutation(prev => getSessionGeneration() !== sessionGeneration ? prev : ({ ...prev, budgets: [...prev.budgets, created] }));
   }, [assertActive, applyMutation]);
+
+  const addBudgets = useCallback(async (budgets: Budget[], requestId: string) => {
+    assertActive();
+    await budgetsApi.createBatch(budgets, requestId);
+    assertActive();
+    mutationRevision.current += 1;
+    await refreshAll(false);
+  }, [assertActive, refreshAll]);
 
   const updateBudget = useCallback(async (id: string, updates: Partial<Budget>) => {
     assertActive();
@@ -229,8 +239,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     addBucket, updateBucket, deleteBucket,
     addTransaction, updateTransaction, deleteTransaction, deleteTransactions, createDeleteUndo,
     addRecurring, updateRecurring, deleteRecurring,
-    addBudget, updateBudget, deleteBudget,
-  }), [visibleState, loading, error, refreshAll, addBucket, updateBucket, deleteBucket, addTransaction, updateTransaction, deleteTransaction, deleteTransactions, createDeleteUndo, addRecurring, updateRecurring, deleteRecurring, addBudget, updateBudget, deleteBudget]);
+    addBudget, addBudgets, updateBudget, deleteBudget,
+  }), [visibleState, loading, error, refreshAll, addBucket, updateBucket, deleteBucket, addTransaction, updateTransaction, deleteTransaction, deleteTransactions, createDeleteUndo, addRecurring, updateRecurring, deleteRecurring, addBudget, addBudgets, updateBudget, deleteBudget]);
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }

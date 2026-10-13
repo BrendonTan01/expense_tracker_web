@@ -1,3 +1,4 @@
+import { parseIsoDateLocal, todayIsoLocal } from '../utils/dateHelpers';
 import { parseMoneyInput, getMoneyInputError } from '../utils/money';
 import { useState, useEffect } from 'react';
 import { Transaction, Bucket } from '../types';
@@ -27,7 +28,7 @@ export default function TransactionForm({
   const [description, setDescription] = useState(initialTransaction?.description || '');
   const [bucketId, setBucketId] = useState(initialTransaction?.bucketId || '');
   const [date, setDate] = useState(
-    initialTransaction?.date ? initialTransaction.date.split('T')[0] : new Date().toISOString().split('T')[0]
+    initialTransaction?.date ? initialTransaction.date.split('T')[0] : todayIsoLocal()
   );
   const [tags, setTags] = useState<string[]>(initialTransaction?.tags || []);
   const [tagInput, setTagInput] = useState('');
@@ -59,7 +60,7 @@ export default function TransactionForm({
       setDate(
         initialTransaction.date 
           ? initialTransaction.date.split('T')[0] 
-          : new Date().toISOString().split('T')[0]
+          : todayIsoLocal()
       );
       setTags(initialTransaction.tags || []);
       setNotes(initialTransaction.notes || '');
@@ -70,7 +71,7 @@ export default function TransactionForm({
       setAmountTouched(false);
       setDescription('');
       setBucketId('');
-      setDate(new Date().toISOString().split('T')[0]);
+      setDate(todayIsoLocal());
       setTags([]);
       setTagInput('');
       setNotes('');
@@ -149,7 +150,7 @@ export default function TransactionForm({
       setAmountTouched(false);
       setDescription('');
       setBucketId('');
-      setDate(new Date().toISOString().split('T')[0]);
+      setDate(todayIsoLocal());
       setTags([]);
       setTagInput('');
       setNotes('');
@@ -174,7 +175,7 @@ export default function TransactionForm({
             <ul style={{ marginTop: '4px', paddingLeft: '20px' }}>
               {duplicateWarning.similar.slice(0, 3).map(t => (
                 <li key={t.id}>
-                  {t.description} - {new Date(t.date).toLocaleDateString()} - ${t.amount.toFixed(2)}
+                  {t.description} - {parseIsoDateLocal(t.date).toLocaleDateString()} - ${t.amount.toFixed(2)}
                 </li>
               ))}
             </ul>

@@ -1,12 +1,15 @@
-import { parseMoneyInput, getMoneyInputError } from '../utils/money';
+import { addMoney, parseMoneyInput, getMoneyInputError } from '../utils/money';
 import { useState, useMemo } from 'react';
 import { Budget, Bucket } from '../types';
+import { generateId } from '../utils/storage';
+import { useMutationAttempt } from '../utils/mutationAttempt';
+import { useAuth } from '../contexts/AuthContext';
 
 interface BudgetManagerProps {
   budgets: Budget[];
   buckets: Bucket[];
-  onAdd: (budget: Budget) => void | Promise<void>;
-  onUpdate: (id: string, budget: Partial<Budget>) => void | Promise<void>;
+  onAdd: (budgets: Budget[], requestId: string) => Promise<void>;
+  onUpdate: (id: string, budget: Partial<Budget>) => Promise<void>;
   onDelete: (id: string) => void | Promise<void>;
 }
 
@@ -23,6 +26,10 @@ export default function BudgetManager({
   onUpdate,
   onDelete,
 }: BudgetManagerProps) {
+  const { user } = useAuth();
+  const save = useMutationAttempt<Budget[]>(user?.id || '');
+  const bulkSave = useMutationAttempt<Budget[]>(user?.id || '');
+  const [formError, setFormError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [bucketId, setBucketId] = useState('');
@@ -72,72 +79,32 @@ export default function BudgetManager({
     return budgets.filter(b => b.period === 'yearly');
   }, [budgets]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (save.pending) return;
     setAmountTouched(true);
+    setFormError(null);
     const numAmount = parseMoneyInput(amount);
-    if (numAmount === null) return;
-    if (!bucketId) return;
-
-    if (editingId) {
-      // Editing: create single budget entry
-      const budgetData: Budget = {
-        id: editingId,
-        bucketId,
-        amount: numAmount,
-        period,
-        year: parseInt(year),
-        month: period === 'monthly' ? parseInt(month) : undefined,
-      };
-      onUpdate(editingId, budgetData);
-    } else {
-      // Creating new budget
-      if (period === 'yearly') {
-        // Yearly: create single budget entry for the entire year
-        const budgetData: Budget = {
-          id: Date.now().toString(),
-          bucketId,
-          amount: numAmount,
-          period: 'yearly',
-          year: parseInt(year),
-          month: undefined,
-        };
-        onAdd(budgetData);
-      } else if (period === 'monthly') {
-        // Monthly: create budget entries based on selection
-        if (applyToAllMonths) {
-          // Create 12 budget entries, one for each month
-          const baseTime = Date.now();
-          for (let m = 1; m <= 12; m++) {
-            const budgetData: Budget = {
-              id: `${baseTime}-${m}`,
-              bucketId,
-              amount: numAmount,
-              period: 'monthly',
-              year: parseInt(year),
-              month: m,
-            };
-            onAdd(budgetData);
-          }
-        } else {
-          // Create single budget entry for selected month
-          const budgetData: Budget = {
-            id: Date.now().toString(),
-            bucketId,
-            amount: numAmount,
-            period: 'monthly',
-            year: parseInt(year),
-            month: parseInt(month),
-          };
-          onAdd(budgetData);
-        }
-      }
+    if (numAmount === null || !bucketId) return;
+    const validYear = /^\d{1,4}$/.test(year) && Number(year) >= 1 && Number(year) <= 9999;
+    const validMonth = /^\d{1,2}$/.test(month) && Number(month) >= 1 && Number(month) <= 12;
+    if (!validYear || (period === 'monthly' && !applyToAllMonths && !validMonth)) {
+      setFormError('Enter a whole year from 1 to 9999 and a valid month.');
+      return;
     }
-
-    resetForm();
+    const months = period === 'monthly' ? (!editingId && applyToAllMonths ? Array.from({ length: 12 }, (_, i) => i + 1) : [Number(month)]) : [undefined];
+    const fingerprint = JSON.stringify({ editingId, bucketId, numAmount, period, year: Number(year), months });
+    await save.run(fingerprint, () => months.map(m => ({
+      id: editingId || generateId(), bucketId, amount: numAmount, period, year: Number(year), month: m,
+    })), async attempt => {
+      if (editingId) await onUpdate(editingId, attempt.payload[0]);
+      else await onAdd(attempt.payload, attempt.requestId);
+    }, resetForm);
   };
 
   const resetForm = () => {
+    save.clear();
+    setFormError(null);
     setShowForm(false);
     setEditingId(null);
     setBucketId('');
@@ -154,6 +121,9 @@ export default function BudgetManager({
   };
 
   const handleEdit = (budget: Budget) => {
+    if (save.pending) return;
+    save.clear();
+    setFormError(null);
     setEditingId(budget.id);
     setBucketId(budget.bucketId);
     setAmount(budget.amount.toString());
@@ -171,18 +141,22 @@ export default function BudgetManager({
 
   // Bulk edit functions
   const startBulkEdit = (group: MonthlyBudgetGroup) => {
-    setBulkEditGroup(group);
-    // Pre-select all months that have budgets
-    const months = new Set(group.budgets.map(b => b.month!).filter(m => m !== undefined));
-    setSelectedMonths(months);
-    // Set initial amount (use first budget's amount, or average if different)
-    const amounts = group.budgets.map(b => b.amount);
-    const avgAmount = amounts.reduce((a, b) => a + b, 0) / amounts.length;
-    setBulkAmount(avgAmount.toFixed(2));
-    setBulkAmountTouched(false);
+    if (bulkSave.pending) return;
+    try {
+      const avgAmount = group.budgets.reduce((total, budget) => addMoney(total, budget.amount), 0) / group.budgets.length;
+      bulkSave.clear();
+      setBulkEditGroup(group);
+      setSelectedMonths(new Set(group.budgets.map(b => b.month!).filter(m => m !== undefined)));
+      setBulkAmount(avgAmount.toFixed(2));
+      setBulkAmountTouched(false);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Unable to calculate the budget amounts.');
+    }
   };
 
   const cancelBulkEdit = () => {
+    if (bulkSave.pending) return;
+    bulkSave.clear();
     setBulkEditGroup(null);
     setSelectedMonths(new Set());
     setBulkAmount('');
@@ -210,38 +184,22 @@ export default function BudgetManager({
   };
 
   const handleBulkUpdate = async () => {
+    if (bulkSave.pending) return;
     setBulkAmountTouched(true);
     if (!bulkEditGroup || selectedMonths.size === 0) return;
     const numAmount = parseMoneyInput(bulkAmount);
     if (numAmount === null) return;
-
-    // Update all selected months - include all required fields
-    // Use Promise.allSettled to handle errors gracefully
-    const budgetsToUpdate = bulkEditGroup.budgets
-      .filter(b => b.month && selectedMonths.has(b.month));
-    
-    const results = await Promise.allSettled(
-      budgetsToUpdate.map(budget => {
-        const result = onUpdate(budget.id, {
-          bucketId: budget.bucketId,
-          amount: numAmount,
-          period: budget.period,
-          year: budget.year,
-          month: budget.month,
-        });
-        // Ensure we always return a Promise
-        return result instanceof Promise ? result : Promise.resolve(result);
-      })
-    );
-
-    // Check if any updates failed
-    const failures = results.filter(r => r.status === 'rejected');
-    if (failures.length > 0) {
-      console.error('Some budget updates failed:', failures);
-      // Still cancel the bulk edit, but errors are logged
-    }
-
-    cancelBulkEdit();
+    const budgetsToUpdate = bulkEditGroup.budgets.filter(b => b.month && selectedMonths.has(b.month));
+    await bulkSave.run(JSON.stringify({ ids: budgetsToUpdate.map(b => b.id), numAmount }),
+      () => budgetsToUpdate.map(b => ({ ...b, amount: numAmount })), async attempt => {
+        const results = await Promise.allSettled(attempt.payload.map(budget => onUpdate(budget.id, {
+          bucketId: budget.bucketId, amount: budget.amount, period: budget.period, year: budget.year, month: budget.month,
+        })));
+        const failures = results.filter(r => r.status === 'rejected');
+        if (failures.length) throw new Error(`${failures.length} budget updates failed. Some updates may have saved; retry the same amounts to finish.`);
+      }, () => {
+        setBulkEditGroup(null); setSelectedMonths(new Set()); setBulkAmount(''); setBulkAmountTouched(false);
+      });
   };
 
   const handleBulkDelete = () => {
@@ -276,6 +234,8 @@ export default function BudgetManager({
 
       {showForm && (
         <form onSubmit={handleSubmit} className="budget-form">
+          <fieldset disabled={save.pending} style={{ border: 0, padding: 0, margin: 0 }}>
+          {(formError || save.error) && <p role="alert" style={{ color: 'var(--danger-color)' }}>{formError || save.error}</p>}
           <div className="form-group">
             <label>Bucket</label>
             <select
@@ -341,8 +301,8 @@ export default function BudgetManager({
               value={year}
               onChange={(e) => setYear(e.target.value)}
               className="input"
-              min="2000"
-              max="2100"
+              min="1"
+              max="9999"
               required
             />
           </div>
@@ -391,12 +351,13 @@ export default function BudgetManager({
 
           <div className="form-actions">
             <button type="submit" className="btn btn-primary">
-              {editingId ? 'Update' : 'Add'} Budget
+              {save.pending ? 'Saving…' : `${editingId ? 'Update' : 'Add'} Budget`}
             </button>
             <button type="button" onClick={handleCancel} className="btn btn-secondary">
               Cancel
             </button>
           </div>
+          </fieldset>
         </form>
       )}
 
@@ -408,6 +369,8 @@ export default function BudgetManager({
           marginBottom: '20px',
           backgroundColor: 'var(--card-bg)'
         }}>
+          <fieldset disabled={bulkSave.pending} style={{ border: 0, padding: 0, margin: 0 }}>
+          {bulkSave.error && <p role="alert" style={{ color: 'var(--danger-color)' }}>{bulkSave.error}</p>}
           <h3 style={{ marginTop: 0, marginBottom: '16px' }}>
             Bulk Edit: {buckets.find(b => b.id === bulkEditGroup.bucketId)?.name || 'Unknown'} - {bulkEditGroup.year}
           </h3>
@@ -522,6 +485,7 @@ export default function BudgetManager({
               Cancel
             </button>
           </div>
+          </fieldset>
         </div>
       )}
 
